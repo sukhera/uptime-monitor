@@ -1,0 +1,10 @@
+[
+    {
+        "name": "Auth API",
+        "status": "operational"
+    },
+    {
+        "name": "Website",
+        "status": "degraded"
+    }
+]

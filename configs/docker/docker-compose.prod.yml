@@ -1,0 +1,58 @@
+version: '3.9'
+
+services:
+  mongo:
+    image: mongo:6
+    container_name: mongo-prod
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data_prod:/data/db
+      - ../../data/seed.js:/docker-entrypoint-initdb.d/seed.js:ro
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+
+  status-checker:
+    build:
+      context: ../../
+      dockerfile: configs/docker/Dockerfile.status-checker
+    container_name: status-checker-prod
+    depends_on:
+      - mongo
+    environment:
+      - MONGO_URI=${MONGO_URI}
+      - DB_NAME=${DB_NAME}
+    restart: always
+
+  api:
+    build:
+      context: ../../
+      dockerfile: configs/docker/Dockerfile.api
+    container_name: status-api-prod
+    depends_on:
+      - mongo
+    environment:
+      - MONGO_URI=${MONGO_URI}
+      - DB_NAME=${DB_NAME}
+      - PORT=8080
+    ports:
+      - "8080:8080"
+    restart: always
+
+  web:
+    image: nginx:alpine
+    container_name: status-web-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../../web/dist:/usr/share/nginx/html
+      - ../nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - api
+    restart: always
+
+volumes:
+  mongo_data_prod:
