@@ -164,8 +164,13 @@ configs/ssl/
 local.env
 .local
 
-# Feature requests and planning documents
+# Feature requests and planning documents  
 feature-request/
+
+# React app build artifacts and dependencies
+web/react-status-page/node_modules/
+web/react-status-page/dist/
+web/react-status-page/.vite/
 
 # Cloud configurations (uncomment if using)
 # .aws/

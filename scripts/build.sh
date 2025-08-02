@@ -4,16 +4,13 @@ set -e
 
 echo "Building Status Page Application..."
 
-# Build Go modules
-echo "Building API..."
-go build -o bin/api ./cmd/api
+echo "Building React frontend..."
+cd web/react-status-page
+npm install
+npm run build
+cd ../..
 
-echo "Building Status Checker..."
-go build -o bin/status-checker ./cmd/status-checker
-
-# Build frontend (if you add a build process later)
-echo "Building Frontend..."
-mkdir -p web/dist
-cp -r web/src/* web/dist/
+echo "Building Go services..."
+docker-compose build
 
 echo "Build completed successfully!"
