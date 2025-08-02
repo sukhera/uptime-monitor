@@ -1,0 +1,33 @@
+# Air configuration for Go hot reloading
+root = "."
+testdata_dir = "testdata"
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/main ./cmd/api"
+  bin = "tmp/main"
+  full_bin = "./tmp/main"
+  watch_dir = ["cmd", "internal"]
+  watch_ext = ["go", "tpl", "tmpl", "html"]
+  exclude_dir = ["assets", "tmp", "vendor", "testdata", "web"]
+  exclude_file = []
+  exclude_regex = ["_test.go"]
+  exclude_unchanged = false
+  follow_symlink = false
+  log = "build-errors.log"
+  delay = 1000
+  stop_on_diff = false
+  send_interrupt = false
+  kill_delay = "0s"
+
+[log]
+  time = false
+
+[color]
+  main = "magenta"
+  watcher = "cyan"
+  build = "yellow"
+  runner = "green"
+
+[misc]
+  clean_on_exit = false

@@ -1,0 +1,66 @@
+version: '3.9'
+
+services:
+  mongo:
+    container_name: status-mongo-dev
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-devpassword}
+      MONGO_INITDB_DATABASE: status_page
+    volumes:
+      - mongo_dev_data:/data/db
+    ports:
+      - "27017:27017"
+
+  status-checker:
+    build:
+      context: .
+      dockerfile: configs/docker/Dockerfile.api.dev
+    container_name: status-checker-dev
+    volumes:
+      - .:/app
+      - /app/tmp
+    environment:
+      MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017/status_page}
+      GO_ENV: development
+      HOT_RELOAD: ${HOT_RELOAD:-true}
+      RETENTION_DAYS: ${RETENTION_DAYS:-30}
+    command: air -c configs/dev/air.toml
+
+  api:
+    build:
+      context: .
+      dockerfile: configs/docker/Dockerfile.api.dev
+    container_name: status-api-dev
+    volumes:
+      - .:/app
+      - /app/tmp
+    environment:
+      MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017/status_page}
+      PORT: ${PORT:-8080}
+      GO_ENV: development
+      HOT_RELOAD: ${HOT_RELOAD:-true}
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_not_for_production}
+    command: air -c configs/dev/air.toml
+
+  web:
+    build:
+      context: ./web/react-status-page
+      dockerfile: ../Dockerfile.dev
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost/api}
+        NODE_ENV: development
+    container_name: status-web-dev
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    environment:
+      NODE_ENV: development
+      VITE_API_URL: ${VITE_API_URL:-http://localhost/api}
+    ports:
+      - "3000:3000"
+    command: npm run dev -- --host 0.0.0.0
+
+volumes:
+  mongo_dev_data:
+    driver: local

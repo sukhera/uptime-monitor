@@ -3,12 +3,22 @@ version: '3.9'
 services:
   mongo:
     image: mongo:6
-    container_name: mongo
-    ports:
-      - "27017:27017"
+    container_name: status-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-changeme}
+      MONGO_INITDB_DATABASE: status_page
     volumes:
       - mongo_data:/data/db
-      - ./data/seed.js:/docker-entrypoint-initdb.d/seed.js:ro
+    networks:
+      - status-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ismaster')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   status-checker:
     build:
@@ -16,11 +26,21 @@ services:
       dockerfile: configs/docker/Dockerfile.status-checker
     container_name: status-checker
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     environment:
-      - MONGO_URI=mongodb://mongo:27017
-      - DB_NAME=statuspage
-    restart: always
+      MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017/status_page}
+      GO_ENV: ${GO_ENV:-production}
+      RETENTION_DAYS: ${RETENTION_DAYS:-90}
+    networks:
+      - status-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   api:
     build:
@@ -28,25 +48,50 @@ services:
       dockerfile: configs/docker/Dockerfile.api
     container_name: status-api
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     environment:
-      - MONGO_URI=mongodb://mongo:27017
-      - DB_NAME=statuspage
-      - PORT=8080
-    ports:
-      - "8080:8080"
-    restart: always
+      MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017/status_page}
+      PORT: ${PORT:-8080}
+      GO_ENV: ${GO_ENV:-production}
+      JWT_SECRET: ${JWT_SECRET:-default_jwt_secret_change_in_production}
+    networks:
+      - status-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   web:
     build:
       context: ./web/react-status-page
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        NODE_ENV: ${NODE_ENV:-production}
     container_name: status-web
     ports:
       - "80:80"
     depends_on:
-      - api
-    restart: always
+      api:
+        condition: service_healthy
+    networks:
+      - status-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+networks:
+  status-network:
+    driver: bridge
 
 volumes:
   mongo_data:
+    driver: local
