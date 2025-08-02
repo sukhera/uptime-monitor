@@ -1,0 +1,22 @@
+FROM golang:1.21-alpine AS dev
+
+RUN apk add --no-cache git curl
+
+# Install Air for hot reloading
+RUN go install github.com/cosmtrek/air@latest
+
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Install additional dev tools
+RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+RUN go install github.com/swaggo/swag/cmd/swag@latest
+
+COPY . .
+
+EXPOSE 8080
+
+CMD ["air", "-c", "configs/dev/air.toml"]

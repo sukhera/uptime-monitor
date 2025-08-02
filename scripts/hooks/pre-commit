@@ -1,0 +1,30 @@
+#!/bin/bash
+# Pre-commit hook
+
+set -e
+
+echo "Running pre-commit checks..."
+
+# Run Go linting
+echo "Checking Go code..."
+if command -v golangci-lint &> /dev/null; then
+  golangci-lint run ./...
+else
+  echo "Warning: golangci-lint not installed, skipping Go linting"
+fi
+
+# Run Go tests
+echo "Running Go tests..."
+go test ./...
+
+# Run frontend linting if web directory exists
+if [ -d "web" ]; then
+  echo "Checking frontend code..."
+  cd web
+  if [ -f "package.json" ]; then
+    npm run lint || echo "Warning: Frontend linting failed"
+  fi
+  cd ..
+fi
+
+echo "✓ Pre-commit checks completed!"
