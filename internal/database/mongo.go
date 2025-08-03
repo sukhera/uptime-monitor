@@ -8,6 +8,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// DatabaseInterface defines the interface for database operations
+type DatabaseInterface interface {
+	ServicesCollection() *mongo.Collection
+	StatusLogsCollection() *mongo.Collection
+	Close() error
+}
+
 type DB struct {
 	Client *mongo.Client
 	Name   string

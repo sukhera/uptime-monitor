@@ -129,7 +129,29 @@ test-go: ## Run Go tests
 	@echo "$(BLUE)Running Go tests...$(NC)"
 	@go test -v -race -coverprofile=coverage.out ./...
 	@go tool cover -html=coverage.out -o coverage.html
+	@go tool cover -func=coverage.out | tail -1
 	@echo "$(GREEN)✓ Go tests completed! Coverage report: coverage.html$(NC)"
+
+test-unit: ## Run unit tests only (short mode)
+	@echo "$(BLUE)Running unit tests only...$(NC)"
+	@go test -short -v ./...
+
+test-coverage: ## Run tests with detailed coverage
+	@echo "$(BLUE)Running tests with detailed coverage...$(NC)"
+	@go test -coverprofile=coverage.out -covermode=atomic -v ./...
+	@go tool cover -func=coverage.out
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "$(GREEN)✓ Coverage report generated: coverage.html$(NC)"
+
+test-package: ## Run tests for specific package (usage: make test-package PKG=./internal/config)
+	@if [ -z "$(PKG)" ]; then echo "$(RED)Usage: make test-package PKG=./internal/config$(NC)"; exit 1; fi
+	@echo "$(BLUE)Running tests for $(PKG)...$(NC)"
+	@go test -v $(PKG)
+
+generate-mocks: ## Generate mock files using mockery
+	@echo "$(BLUE)Generating mocks...$(NC)"
+	@mockery
+	@echo "$(GREEN)✓ Mocks generated!$(NC)"
 
 test-frontend: ## Run frontend tests
 	@echo "$(BLUE)Running frontend tests...$(NC)"

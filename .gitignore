@@ -135,6 +135,10 @@ temp/
 test-results/
 lint-results/
 coverage.html
+coverage.out
+
+# Generated mocks
+mocks/
 
 # Backups
 backups/
