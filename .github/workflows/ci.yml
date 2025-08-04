@@ -45,6 +45,13 @@ jobs:
     - name: Verify Go modules
       run: go mod verify
 
+    - name: Install and run mockery to generate mocks
+      run: |
+        go install github.com/vektra/mockery/v2@latest
+        mockery
+        # Fix package name from 'database' to 'mocks'
+        sed -i 's/package database/package mocks/' mocks/*.go
+
     - name: Wait for MongoDB
       run: |
         echo "Waiting for MongoDB to be ready..."
@@ -95,6 +102,16 @@ jobs:
       with:
         go-version: ${{ env.GO_VERSION }}
         cache: true
+
+    - name: Download Go modules
+      run: go mod download
+
+    - name: Install and run mockery to generate mocks
+      run: |
+        go install github.com/vektra/mockery/v2@latest
+        mockery
+        # Fix package name from 'database' to 'mocks'
+        sed -i 's/package database/package mocks/' mocks/*.go
 
     - name: Run golangci-lint
       uses: golangci/golangci-lint-action@v4
