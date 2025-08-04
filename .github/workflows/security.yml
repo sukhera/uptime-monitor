@@ -56,7 +56,7 @@ jobs:
       if: matrix.language == 'go'
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22'
+        go-version: '1.24'
         cache: true
 
     - name: Build Go project (for CodeQL)
@@ -96,7 +96,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22'
+        go-version: '1.24'
         cache: true
 
     - name: Download Go modules
@@ -229,19 +229,19 @@ jobs:
 
     - name: Upload Trivy scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3
-      if: always()
+      if: always() && hashFiles('trivy-api-results.sarif') != ''
       with:
         sarif_file: trivy-api-results.sarif
 
     - name: Upload Trivy Checker scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3
-      if: always()
+      if: always() && hashFiles('trivy-checker-results.sarif') != ''
       with:
         sarif_file: trivy-checker-results.sarif
 
     - name: Upload Trivy Frontend scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3
-      if: always()
+      if: always() && hashFiles('trivy-frontend-results.sarif') != ''
       with:
         sarif_file: trivy-frontend-results.sarif
 
@@ -314,7 +314,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22'
+        go-version: '1.24'
         cache: true
 
     - name: Install go-licenses
