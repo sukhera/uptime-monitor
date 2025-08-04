@@ -265,6 +265,7 @@ jobs:
       if: always()
       with:
         sarif_file: 'trivy-results.sarif'
+        category: trivy-integration
 
   # Dependency Check
   dependency-check:

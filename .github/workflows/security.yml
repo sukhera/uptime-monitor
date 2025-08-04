@@ -112,6 +112,7 @@ jobs:
       if: always()
       with:
         sarif_file: gosec-results.sarif
+        category: gosec
 
     - name: Run govulncheck
       run: |
@@ -245,6 +246,7 @@ jobs:
       if: always() && steps.check-api-sarif.outputs.exists == 'true'
       with:
         sarif_file: trivy-api-results.sarif
+        category: trivy-api
 
     - name: Check if Checker SARIF file exists
       id: check-checker-sarif
@@ -261,6 +263,7 @@ jobs:
       if: always() && steps.check-checker-sarif.outputs.exists == 'true'
       with:
         sarif_file: trivy-checker-results.sarif
+        category: trivy-checker
 
     - name: Check if Frontend SARIF file exists
       id: check-frontend-sarif
@@ -277,6 +280,7 @@ jobs:
       if: always() && steps.check-frontend-sarif.outputs.exists == 'true'
       with:
         sarif_file: trivy-frontend-results.sarif
+        category: trivy-frontend
 
   # Container Image Security Scan with Snyk
   snyk-security-scan:
