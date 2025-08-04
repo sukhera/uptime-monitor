@@ -138,7 +138,7 @@ updates:
     rebase-strategy: "auto"
     target-branch: "main"
 
-  # GitHub Actions
+  # GitHub Actions Configuration
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
