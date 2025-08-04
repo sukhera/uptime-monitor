@@ -13,7 +13,6 @@ updates:
       - "sukhera"
     commit-message:
       prefix: "chore(deps)"
-      prefix-development: "chore(deps-dev)"
       include: "scope"
     labels:
       - "dependencies"
@@ -141,7 +140,7 @@ updates:
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
-    directory: "/.github/workflows"
+    directory: "/"
     schedule:
       interval: "weekly"
       day: "wednesday"
