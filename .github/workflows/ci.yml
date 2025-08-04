@@ -231,7 +231,7 @@ jobs:
         MONGO_URI: mongodb://mongo:27017/status_page_test
       run: |
         # Start services
-        docker-compose -f docker-compose.yml up -d --build
+        docker compose -f docker-compose.yml up -d --build
         
         # Wait for services to be ready
         echo "Waiting for services to start..."
@@ -244,10 +244,10 @@ jobs:
         go test -v ./tests/... || echo "Integration tests failed or skipped"
         
         # Show service logs for debugging
-        docker-compose logs --tail=50
+        docker compose logs --tail=50
         
         # Cleanup
-        docker-compose down -v
+        docker compose down -v
 
   # Security Scanning
   security-scan:
