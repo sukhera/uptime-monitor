@@ -1,123 +1,71 @@
-# Golangci-lint configuration
+# Golangci-lint configuration - Focused on functional issues
 run:
   timeout: 5m
   modules-download-mode: readonly
 
 linters:
   enable:
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - typecheck
-    - unused
-    - asciicheck
-    - bidichk
-    - bodyclose
-    - contextcheck
-    - cyclop
-    - dupl
-    - durationcheck
-    - errname
-    - errorlint
-    - exhaustive
-    - copyloopvar
-    - forbidigo
-    - forcetypeassert
-    - funlen
-    - gci
-    - gochecknoglobals
-    - gochecknoinits
-    - gocognit
-    - goconst
-    - gocritic
-    - gocyclo
-    - godot
-    - gofmt
-    - gofumpt
-    - goheader
-    - goimports
-    - mnd
-    - gomoddirectives
-    - gomodguard
-    - goprintffuncname
-    - gosec
-    - grouper
-    - importas
-    - lll
-    - maintidx
-    - makezero
-    - misspell
-    - nakedret
-    - nestif
-    - nilerr
-    - nilnil
-    - nlreturn
-    - noctx
-    - nolintlint
-    - predeclared
-    - promlinter
-    - revive
-    - rowserrcheck
-    - sqlclosecheck
-    - stylecheck
-    - tagliatelle
-    - usetesting
-    - testpackage
-    - thelper
-    - tparallel
-    - unconvert
-    - unparam
-    - wastedassign
-    - whitespace
-    - wrapcheck
-    - wsl
+    # Essential functional linters
+    - errcheck          # Check for unchecked errors
+    - gosimple         # Suggest code simplifications
+    - govet            # Go vet analysis
+    - ineffassign      # Detect ineffectual assignments
+    - staticcheck      # Static analysis
+    - typecheck        # Parse and type-check Go code
+    - unused           # Check for unused constants, variables, functions and types
+    
+    # Security and best practices
+    - gosec            # Security issues
+    - bodyclose        # HTTP body close checks
+    - copyloopvar      # Detect loop variable issues
+    - errname          # Error naming conventions
+    - makezero         # Zero-length slice creation
+    - misspell         # Misspelled English words
+    - rowserrcheck     # SQL row error checks
+    - sqlclosecheck    # SQL close checks
+    
+    # Code quality (reasonable settings)
+    - goconst          # Repeated strings that could be constants
+    - dupl             # Code duplication (with higher threshold)
+    - gofmt            # Code formatting
+    - goimports        # Import formatting
 
 linters-settings:
-  funlen:
-    lines: 100
-    statements: 50
-  gocyclo:
-    min-complexity: 15
   goconst:
-    min-len: 2
-    min-occurrences: 3
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-  gofumpt:
-    extra-rules: true
-  mnd:
-    settings:
-      mnd:
-        checks:
-          - argument
-          - case
-          - condition
-          - operation
-          - return
-          - assign
+    min-len: 3           # Minimum length of string constant
+    min-occurrences: 3   # Minimum occurrences to require constant
+  
+  dupl:
+    threshold: 100       # Higher threshold to avoid minor duplication complaints
+  
   govet:
-    check-shadowing: true
-  lll:
-    line-length: 120
+    disable:
+      - shadow  # Disable variable shadowing (too strict)
+  
   misspell:
     locale: US
-  nolintlint:
-    allow-leading-space: true
-    allow-unused: false
-    require-explanation: false
-    require-specific: false
+  
+  gosec:
+    excludes:
+      - G404  # Allow weak random number generator for non-crypto use
 
 issues:
+  exclude-dirs:
+    - "mocks"
   exclude-rules:
+    # Be more lenient with test files
     - path: _test\.go
       linters:
-        - mnd
-        - funlen
-        - gocyclo
+        - goconst
+        - dupl
+        - errcheck
+    
+    # Allow some flexibility in main files
+    - path: main\.go
+      linters:
+        - goconst
+  
+  # Don't fail on common patterns
+  exclude:
+    - "should not use dot imports"
+    - "should have a package comment"

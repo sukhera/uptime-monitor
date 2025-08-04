@@ -1,0 +1,64 @@
+# Code Owners for Uptime Monitor
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global owners - These users will be requested for review when someone opens a pull request
+* @sukhera
+
+# Backend Go code
+/cmd/ @sukhera
+/internal/ @sukhera
+/pkg/ @sukhera
+*.go @sukhera
+go.mod @sukhera
+go.sum @sukhera
+
+# Frontend React code
+/web/ @sukhera
+/web/react-status-page/ @sukhera
+*.js @sukhera
+*.jsx @sukhera
+*.ts @sukhera
+*.tsx @sukhera
+package.json @sukhera
+package-lock.json @sukhera
+
+# Infrastructure and DevOps
+/configs/ @sukhera
+/deployments/ @sukhera
+/scripts/ @sukhera
+Dockerfile* @sukhera
+docker-compose*.yml @sukhera
+Makefile @sukhera
+*.yaml @sukhera
+*.yml @sukhera
+
+# GitHub Configuration
+/.github/ @sukhera
+/.github/workflows/ @sukhera
+/.github/ISSUE_TEMPLATE/ @sukhera
+
+# Documentation
+/docs/ @sukhera
+*.md @sukhera
+README.md @sukhera
+
+# Configuration files
+/.env.example @sukhera
+/.gitignore @sukhera
+/.dockerignore @sukhera
+
+# Testing
+/tests/ @sukhera
+*_test.go @sukhera
+*.test.js @sukhera
+jest.config.js @sukhera
+
+# Database and data
+/data/ @sukhera
+/migrations/ @sukhera
+
+# Security sensitive files
+/.github/workflows/security.yml @sukhera
+/.github/workflows/cd.yml @sukhera
+/configs/env/ @sukhera
+SECURITY.md @sukhera

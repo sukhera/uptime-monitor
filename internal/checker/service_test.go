@@ -17,9 +17,9 @@ import (
 
 func TestNewService(t *testing.T) {
 	mockDB := mocks.NewMockDatabaseInterface(t)
-	
+
 	service := NewService(mockDB)
-	
+
 	assert.NotNil(t, service)
 	assert.NotNil(t, service.client)
 	assert.Equal(t, 10*time.Second, service.client.Timeout)
@@ -47,7 +47,9 @@ func TestService_checkService(t *testing.T) {
 				// Verify headers were set
 				assert.Equal(t, "Bearer token", r.Header.Get("Authorization"))
 				w.WriteHeader(200)
-				w.Write([]byte("OK"))
+				if _, err := w.Write([]byte("OK")); err != nil {
+					t.Errorf("Failed to write response: %v", err)
+				}
 			},
 			expectedStatus: "operational",
 		},
@@ -120,7 +122,7 @@ func TestService_checkService(t *testing.T) {
 			// Assertions
 			assert.Equal(t, tt.service.Name, result.ServiceName)
 			assert.Equal(t, tt.expectedStatus, result.Status)
-			
+
 			if tt.expectedError != "" {
 				assert.Contains(t, result.Error, tt.expectedError)
 			} else if tt.serverDelay == 0 {
@@ -191,7 +193,6 @@ func TestService_checkService_WithRetries(t *testing.T) {
 	assert.Equal(t, 3, callCount) // Should have retried
 }
 
-
 func TestService_RunHealthChecks_DatabaseInterface(t *testing.T) {
 	// This test demonstrates how the service interacts with the database interface
 	// For full testing of RunHealthChecks, you would need to mock mongo.Collection operations
@@ -199,20 +200,20 @@ func TestService_RunHealthChecks_DatabaseInterface(t *testing.T) {
 
 	t.Run("service properly uses database interface", func(t *testing.T) {
 		mockDB := mocks.NewMockDatabaseInterface(t)
-		
+
 		// Set up expectations for the database interface methods
 		mockServicesCollection := &mongo.Collection{}
 		mockStatusLogsCollection := &mongo.Collection{}
-		
+
 		mockDB.EXPECT().ServicesCollection().Return(mockServicesCollection).Maybe()
 		mockDB.EXPECT().StatusLogsCollection().Return(mockStatusLogsCollection).Maybe()
 
 		service := NewService(mockDB)
-		
+
 		// Verify the service was created with the mock database
 		assert.NotNil(t, service)
 		assert.Equal(t, mockDB, service.db)
-		
+
 		// Note: Full testing of RunHealthChecks would require mocking mongo.Collection
 		// operations, which is beyond the current interface abstraction level
 	})
@@ -268,7 +269,7 @@ func TestService_Integration(t *testing.T) {
 	// Test a simple service check
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	}))
 	defer server.Close()
 

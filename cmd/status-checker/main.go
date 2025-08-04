@@ -15,9 +15,9 @@ import (
 func main() {
 	var (
 		intervalMinutes = flag.Int("interval", 0, "Check interval in minutes (overrides env var)")
-		mongoURI       = flag.String("mongo-uri", "", "MongoDB connection URI (overrides env var)")
-		dbName         = flag.String("db-name", "", "Database name (overrides env var)")
-		verbose        = flag.Bool("verbose", false, "Enable verbose logging")
+		mongoURI        = flag.String("mongo-uri", "", "MongoDB connection URI (overrides env var)")
+		dbName          = flag.String("db-name", "", "Database name (overrides env var)")
+		verbose         = flag.Bool("verbose", false, "Enable verbose logging")
 	)
 	flag.Parse()
 
@@ -51,14 +51,17 @@ func main() {
 	checkerService := checker.NewService(db)
 	scheduler := gocron.NewScheduler(time.UTC)
 
-	scheduler.Every(cfg.CheckInterval).Do(func() {
+	_, err = scheduler.Every(cfg.CheckInterval).Do(func() {
 		ctx := context.Background()
 		log.Println("[INFO] Running health checks...")
-		
+
 		if err := checkerService.RunHealthChecks(ctx); err != nil {
 			log.Printf("[ERROR] Error running health checks: %v", err)
 		}
 	})
+	if err != nil {
+		log.Fatalf("[ERROR] Failed to schedule health checks: %v", err)
+	}
 
 	log.Println("[INFO] Status checker started successfully")
 	scheduler.StartBlocking()

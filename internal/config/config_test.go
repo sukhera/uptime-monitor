@@ -11,10 +11,10 @@ import (
 
 func TestConfig_Load(t *testing.T) {
 	tests := []struct {
-		name      string
-		envVars   map[string]string
-		expected  *Config
-		resetEnv  bool
+		name     string
+		envVars  map[string]string
+		expected *Config
+		resetEnv bool
 	}{
 		{
 			name:     "default values when no env vars set",
@@ -30,10 +30,10 @@ func TestConfig_Load(t *testing.T) {
 		{
 			name: "custom values from env vars",
 			envVars: map[string]string{
-				"MONGO_URI":               "mongodb://custom:27017",
-				"DB_NAME":                 "custom_db",
-				"PORT":                    "9090",
-				"CHECK_INTERVAL_MINUTES":  "5",
+				"MONGO_URI":              "mongodb://custom:27017",
+				"DB_NAME":                "custom_db",
+				"PORT":                   "9090",
+				"CHECK_INTERVAL_MINUTES": "5",
 			},
 			expected: &Config{
 				MongoURI:      "mongodb://custom:27017",
@@ -47,6 +47,7 @@ func TestConfig_Load(t *testing.T) {
 			envVars: map[string]string{
 				"CHECK_INTERVAL_MINUTES": "invalid",
 			},
+			resetEnv: true,
 			expected: &Config{
 				MongoURI:      "mongodb://localhost:27017",
 				DBName:        "statuspage",
@@ -59,6 +60,7 @@ func TestConfig_Load(t *testing.T) {
 			envVars: map[string]string{
 				"CHECK_INTERVAL_MINUTES": "0",
 			},
+			resetEnv: true,
 			expected: &Config{
 				MongoURI:      "mongodb://localhost:27017",
 				DBName:        "statuspage",
@@ -71,6 +73,7 @@ func TestConfig_Load(t *testing.T) {
 			envVars: map[string]string{
 				"CHECK_INTERVAL_MINUTES": "-5",
 			},
+			resetEnv: true,
 			expected: &Config{
 				MongoURI:      "mongodb://localhost:27017",
 				DBName:        "statuspage",
@@ -85,7 +88,7 @@ func TestConfig_Load(t *testing.T) {
 			// Store original env vars
 			originalVars := make(map[string]string)
 			envKeys := []string{"MONGO_URI", "DB_NAME", "PORT", "CHECK_INTERVAL_MINUTES"}
-			
+
 			for _, key := range envKeys {
 				originalVars[key] = os.Getenv(key)
 			}
@@ -215,10 +218,10 @@ func TestLoad_Integration(t *testing.T) {
 	// Test that Load() + Validate() works together
 	config := Load()
 	err := config.Validate()
-	
+
 	// Should not error with default values
 	assert.NoError(t, err)
-	
+
 	// Should have sensible defaults
 	assert.NotEmpty(t, config.MongoURI)
 	assert.NotEmpty(t, config.DBName)

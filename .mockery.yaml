@@ -3,7 +3,7 @@ packages:
   github.com/sukhera/uptime-monitor/internal/database:
     config:
       dir: "mocks"
-      mockname: "Mock{{.InterfaceName}}"
-      filename: "{{.MockName}}.go"
+      mockname: "MockDatabaseInterface"
+      filename: "MockDatabaseInterface.go"
     interfaces:
-      DatabaseInterface:
+      Interface:

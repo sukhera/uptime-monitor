@@ -1,0 +1,348 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.24'
+  NODE_VERSION: '18'
+  MONGO_URI: mongodb://localhost:27017/status_page_test
+
+jobs:
+  # Go Backend Tests
+  test-backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Download Go modules
+      run: go mod download
+
+    - name: Verify Go modules
+      run: go mod verify
+
+    - name: Install and run mockery to generate mocks
+      run: |
+        go install github.com/vektra/mockery/v2@latest
+        mockery
+        # Fix package name from 'database' to 'mocks'
+        sed -i 's/package database/package mocks/' mocks/*.go
+
+    - name: Wait for MongoDB
+      run: |
+        echo "Waiting for MongoDB to be ready..."
+        for i in {1..30}; do
+          if mongosh --eval "db.runCommand({ping: 1})" > /dev/null 2>&1; then
+            echo "MongoDB is ready!"
+            break
+          fi
+          echo "Waiting for MongoDB... ($i/30)"
+          sleep 2
+        done
+
+    - name: Run Go tests
+      env:
+        MONGO_URI: ${{ env.MONGO_URI }}
+      run: |
+        go test -v -race -coverprofile=coverage.out ./...
+        go tool cover -func=coverage.out
+
+    - name: Generate coverage report
+      run: go tool cover -html=coverage.out -o coverage.html
+
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.out
+        flags: backend
+        name: backend-coverage
+        fail_ci_if_error: false
+
+    - name: Archive coverage results
+      uses: actions/upload-artifact@v4
+      with:
+        name: backend-coverage-report
+        path: coverage.html
+
+  # Go Linting
+  lint-backend:
+    name: Backend Linting
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Download Go modules
+      run: go mod download
+
+    - name: Install and run mockery to generate mocks
+      run: |
+        go install github.com/vektra/mockery/v2@latest
+        mockery
+        # Fix package name from 'database' to 'mocks'
+        sed -i 's/package database/package mocks/' mocks/*.go
+
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v4
+      with:
+        version: latest
+        args: --timeout=5m
+
+  # Frontend Tests
+  test-frontend:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: web/react-status-page/package-lock.json
+
+    - name: Install frontend dependencies
+      run: |
+        cd web/react-status-page
+        npm ci
+
+    - name: Run frontend linter
+      run: |
+        cd web/react-status-page
+        npm run lint
+
+    - name: Build frontend
+      run: |
+        cd web/react-status-page
+        npm run build
+
+    - name: Archive frontend build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-build
+        path: web/react-status-page/dist
+
+  # Docker Build Tests
+  test-docker:
+    name: Docker Build Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build API Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./configs/docker/Dockerfile.api
+        push: false
+        tags: uptime-monitor-api:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build Status Checker Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./configs/docker/Dockerfile.status-checker
+        push: false
+        tags: uptime-monitor-checker:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build Frontend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./web/react-status-page
+        file: ./web/react-status-page/Dockerfile
+        push: false
+        tags: uptime-monitor-frontend:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # Integration Tests (Disabled - See feature-request/integration-tests-ci-cd.md)
+  # TODO: Re-enable once Docker environment and test dependencies are properly configured
+  # test-integration:
+  #   name: Integration Tests
+  #   runs-on: ubuntu-latest
+  #   needs: [test-backend, test-frontend]
+  #   
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@v4
+  #
+  #   - name: Set up Go
+  #     uses: actions/setup-go@v5
+  #     with:
+  #       go-version: ${{ env.GO_VERSION }}
+  #       cache: true
+  #
+  #   - name: Set up Docker Buildx
+  #     uses: docker/setup-buildx-action@v3
+  #
+  #   - name: Create test environment file
+  #     run: |
+  #       cat > .env << EOF
+  #       MONGO_URI=mongodb://mongo:27017/status_page_test
+  #       API_PORT=8080
+  #       CHECK_INTERVAL=30s
+  #       LOG_LEVEL=info
+  #       EOF
+  #
+  #   - name: Run integration tests with Docker Compose
+  #     env:
+  #       MONGO_URI: mongodb://mongo:27017/status_page_test
+  #     run: |
+  #       # Start services
+  #       docker compose -f docker-compose.yml up -d --build
+  #       
+  #       # Wait for services to be ready
+  #       echo "Waiting for services to start..."
+  #       sleep 30
+  #       
+  #       # Wait for API health check
+  #       timeout 60 bash -c 'until curl -f http://localhost/api/health; do echo "Waiting for API..."; sleep 5; done' || echo "API health check failed, continuing with tests"
+  #       
+  #       # Run integration tests (skip if MongoDB not available)
+  #       go test -v ./tests/... || echo "Integration tests failed or skipped"
+  #       
+  #       # Show service logs for debugging
+  #       docker compose logs --tail=50
+  #       
+  #       # Cleanup
+  #       docker compose down -v
+
+  # Security Scanning
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Run Gosec Security Scanner
+      run: |
+        go install github.com/securego/gosec/v2/cmd/gosec@latest
+        gosec ./...
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+        category: trivy-integration
+
+  # Dependency Check
+  dependency-check:
+    name: Dependency Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: web/react-status-page/package-lock.json
+
+    - name: Check Go dependencies for vulnerabilities
+      run: |
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        govulncheck ./...
+
+    - name: Check Node.js dependencies for vulnerabilities
+      run: |
+        cd web/react-status-page
+        npm audit --audit-level=high || echo "Some vulnerabilities found but continuing"
+      continue-on-error: true
+
+  # Build Summary
+  build-summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [test-backend, lint-backend, test-frontend, test-docker, test-integration, security-scan, dependency-check]
+    if: always()
+    
+    steps:
+    - name: Check all jobs status
+      run: |
+        echo "Backend Tests: ${{ needs.test-backend.result }}"
+        echo "Backend Linting: ${{ needs.lint-backend.result }}"
+        echo "Frontend Tests: ${{ needs.test-frontend.result }}"
+        echo "Docker Build Tests: ${{ needs.test-docker.result }}"
+        echo "Integration Tests: ${{ needs.test-integration.result }}"
+        echo "Security Scan: ${{ needs.security-scan.result }}"
+        echo "Dependency Check: ${{ needs.dependency-check.result }}"
+        
+        if [[ "${{ needs.test-backend.result }}" == "failure" || 
+              "${{ needs.lint-backend.result }}" == "failure" || 
+              "${{ needs.test-frontend.result }}" == "failure" || 
+              "${{ needs.test-docker.result }}" == "failure" || 
+              "${{ needs.test-integration.result }}" == "failure" ]]; then
+          echo "❌ CI Pipeline Failed"
+          exit 1
+        else
+          echo "✅ CI Pipeline Passed"
+        fi

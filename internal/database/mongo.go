@@ -8,8 +8,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// DatabaseInterface defines the interface for database operations
-type DatabaseInterface interface {
+// Interface defines the interface for database operations
+type Interface interface {
 	ServicesCollection() *mongo.Collection
 	StatusLogsCollection() *mongo.Collection
 	Close() error

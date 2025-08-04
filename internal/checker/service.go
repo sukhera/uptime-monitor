@@ -8,17 +8,23 @@ import (
 	"sync"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
 	"github.com/sukhera/uptime-monitor/internal/database"
 	"github.com/sukhera/uptime-monitor/internal/models"
+	"go.mongodb.org/mongo-driver/bson"
+)
+
+const (
+	statusDown        = "down"
+	statusOperational = "operational"
+	statusDegraded    = "degraded"
 )
 
 type Service struct {
-	db     database.DatabaseInterface
+	db     database.Interface
 	client *http.Client
 }
 
-func NewService(db database.DatabaseInterface) *Service {
+func NewService(db database.Interface) *Service {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
@@ -69,9 +75,9 @@ func (s *Service) checkURL(service models.Service, wg *sync.WaitGroup, statusLog
 	defer wg.Done()
 
 	statusLog := s.checkService(service)
-	log.Printf("[INFO] %s: %s (status: %d, latency: %dms)", 
+	log.Printf("[INFO] %s: %s (status: %d, latency: %dms)",
 		service.Name, statusLog.Status, statusLog.StatusCode, statusLog.Latency)
-	
+
 	statusLogs <- statusLog
 }
 
@@ -111,7 +117,7 @@ func (s *Service) checkService(service models.Service) models.StatusLog {
 
 		lastErr = err
 		if attempt < maxRetries {
-			log.Printf("[WARN] Attempt %d failed for %s, retrying in %v: %v", 
+			log.Printf("[WARN] Attempt %d failed for %s, retrying in %v: %v",
 				attempt, service.Name, retryDelay, err)
 			time.Sleep(retryDelay)
 		}
@@ -124,7 +130,7 @@ func (s *Service) checkService(service models.Service) models.StatusLog {
 	}
 
 	if lastErr != nil && resp == nil {
-		statusLog.Status = "down"
+		statusLog.Status = statusDown
 		statusLog.Error = fmt.Sprintf("Request failed after %d attempts: %v", maxRetries, lastErr)
 		log.Printf("[ERROR] Request failed for %s after %d attempts: %v", service.Name, maxRetries, lastErr)
 		return statusLog
@@ -134,11 +140,11 @@ func (s *Service) checkService(service models.Service) models.StatusLog {
 	statusLog.StatusCode = resp.StatusCode
 
 	if resp.StatusCode == service.ExpectedStatus {
-		statusLog.Status = "operational"
+		statusLog.Status = statusOperational
 	} else if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		statusLog.Status = "degraded"
+		statusLog.Status = statusDegraded
 	} else {
-		statusLog.Status = "down"
+		statusLog.Status = statusDown
 		statusLog.Error = fmt.Sprintf("Unexpected status code: %d", resp.StatusCode)
 	}
 

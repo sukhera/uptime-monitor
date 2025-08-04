@@ -17,7 +17,7 @@ export const useApi = (url, options = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [url]);
+  }, [url, options]);
 
   useEffect(() => {
     fetchData();

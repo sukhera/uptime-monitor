@@ -18,7 +18,7 @@ A comprehensive uptime monitoring solution with real-time service monitoring, bu
 
 ### Prerequisites
 - Docker and Docker Compose
-- Go 1.21+
+- Go 1.24+
 - Node.js 18+
 - Git
 
@@ -40,7 +40,7 @@ make dev      # Start development environment
 ### 🔧 Tech Stack
 
 #### Backend
-- **Go 1.21+**: High-performance backend services
+- **Go 1.24+**: High-performance backend services
 - **MongoDB**: Document-based data storage
 - **Docker**: Containerized deployment
 - **Nginx**: Reverse proxy and static serving
