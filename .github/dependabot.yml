@@ -6,7 +6,7 @@ updates:
     schedule:
       interval: "daily"
       time: "06:00"
-      timezone: "UTC"
+      timezone: "Etc/UTC"
     assignees:
       - "sukhera"
     reviewers:
@@ -24,7 +24,6 @@ updates:
       separator: "/"
     rebase-strategy: "auto"
     target-branch: "main"
-    versioning-strategy: "auto"
     # Group minor and patch updates
     groups:
       go-minor-patch:
@@ -41,7 +40,7 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "06:00"
-      timezone: "UTC"
+      timezone: "Etc/UTC"
     assignees:
       - "sukhera"
     reviewers:
@@ -60,7 +59,6 @@ updates:
       separator: "/"
     rebase-strategy: "auto"
     target-branch: "main"
-    versioning-strategy: "auto"
     # Ignore specific packages that require manual updates
     ignore:
       - dependency-name: "react"
@@ -96,7 +94,7 @@ updates:
       interval: "weekly"
       day: "tuesday"
       time: "06:00"
-      timezone: "UTC"
+      timezone: "Etc/UTC"
     assignees:
       - "sukhera"
     reviewers:
@@ -122,7 +120,7 @@ updates:
       interval: "weekly"
       day: "tuesday"
       time: "06:00"
-      timezone: "UTC"
+      timezone: "Etc/UTC"
     assignees:
       - "sukhera"
     reviewers:
@@ -148,7 +146,7 @@ updates:
       interval: "weekly"
       day: "wednesday"
       time: "06:00"
-      timezone: "UTC"
+      timezone: "Etc/UTC"
     assignees:
       - "sukhera"
     reviewers:
