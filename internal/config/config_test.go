@@ -47,6 +47,7 @@ func TestConfig_Load(t *testing.T) {
 			envVars: map[string]string{
 				"CHECK_INTERVAL_MINUTES": "invalid",
 			},
+			resetEnv: true,
 			expected: &Config{
 				MongoURI:      "mongodb://localhost:27017",
 				DBName:        "statuspage",
@@ -59,6 +60,7 @@ func TestConfig_Load(t *testing.T) {
 			envVars: map[string]string{
 				"CHECK_INTERVAL_MINUTES": "0",
 			},
+			resetEnv: true,
 			expected: &Config{
 				MongoURI:      "mongodb://localhost:27017",
 				DBName:        "statuspage",
@@ -71,6 +73,7 @@ func TestConfig_Load(t *testing.T) {
 			envVars: map[string]string{
 				"CHECK_INTERVAL_MINUTES": "-5",
 			},
+			resetEnv: true,
 			expected: &Config{
 				MongoURI:      "mongodb://localhost:27017",
 				DBName:        "statuspage",

@@ -50,6 +50,8 @@ linters-settings:
       - G404  # Allow weak random number generator for non-crypto use
 
 issues:
+  exclude-dirs:
+    - "mocks"
   exclude-rules:
     # Be more lenient with test files
     - path: _test\.go
