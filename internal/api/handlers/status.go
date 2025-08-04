@@ -26,7 +26,7 @@ func NewStatusHandler(db *database.DB) *StatusHandler {
 func (h *StatusHandler) GetStatus(w http.ResponseWriter, _ *http.Request) {
 	ctx := context.Background()
 
-	opts := options.Find().SetSort(bson.D{{"timestamp", -1}}).SetLimit(100)
+	opts := options.Find().SetSort(bson.D{primitive.E{Key: "timestamp", Value: -1}}).SetLimit(100)
 	cursor, err := h.db.StatusLogsCollection().Find(ctx, bson.M{}, opts)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
@@ -53,7 +53,7 @@ func (h *StatusHandler) GetStatus(w http.ResponseWriter, _ *http.Request) {
 			} else if primitiveDateTime, ok := log["timestamp"].(primitive.DateTime); ok {
 				updatedAt = primitiveDateTime.Time()
 			}
-			
+
 			serviceMap[serviceName] = models.ServiceStatus{
 				Name:      serviceName,
 				Status:    log["status"].(string),

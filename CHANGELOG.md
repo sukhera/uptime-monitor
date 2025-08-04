@@ -8,23 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Upgrade Go version from 1.21/1.22 to 1.24 across entire project
-  - Updated `go.mod` to require Go 1.24
-  - Updated all Dockerfiles to use `golang:1.24` base images
-  - Updated all GitHub workflows to use Go 1.24
-  - Updated README.md requirements to reflect Go 1.24+
+- Upgrade to Go 1.24 across entire project for consistency and latest features
+- Remove integration tests requiring MongoDB from unit test suite
 
 ### Fixed
-- Fix Dockerfile casing issues for proper hadolint compliance
-  - Fixed `FROM golang:1.21 as builder` to `FROM golang:1.24 AS builder` in API and status-checker Dockerfiles
-  - Fixed `FROM golang:1.21-alpine AS dev` to `FROM golang:1.24-alpine AS dev` in development Dockerfile
-- Fix GitHub security workflow SARIF upload failures
-  - Added file existence checks to prevent uploading missing SARIF files when Docker builds fail
-  - Use `hashFiles()` function to conditionally upload only existing SARIF files
-  - Prevents pipeline failures when Trivy scans don't generate SARIF files due to build errors
-- Resolve version inconsistency across Docker and CI/CD infrastructure
-  - Standardized Go version to 1.24 in all Dockerfiles and GitHub workflows
-  - Eliminates potential build conflicts from version mismatches
+- Fix Docker build failures due to hadolint casing issues (`as` → `AS`)
+- Fix GitHub security workflow SARIF upload failures with proper error handling
+- Fix missing gosec action reference in security workflow
+- Update `github.com/rs/cors` to v1.11.1 to address security vulnerability (GO-2024-2883)
+- Resolve CI/CD pipeline failures and improve reliability
 
 ## [0.4.0] - 2025-08-04
 

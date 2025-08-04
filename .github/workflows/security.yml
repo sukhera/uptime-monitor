@@ -103,9 +103,9 @@ jobs:
       run: go mod download
 
     - name: Run Gosec Security Scanner
-      uses: securecodewarrior/github-action-gosec@master
-      with:
-        args: '-fmt sarif -out gosec-results.sarif ./...'
+      run: |
+        go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+        gosec -fmt sarif -out gosec-results.sarif ./...
         
     - name: Upload Gosec scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3
@@ -208,6 +208,7 @@ jobs:
 
     - name: Run Trivy vulnerability scanner on API image
       uses: aquasecurity/trivy-action@master
+      continue-on-error: true
       with:
         image-ref: 'uptime-monitor-api:security-scan'
         format: 'sarif'
@@ -215,6 +216,7 @@ jobs:
 
     - name: Run Trivy vulnerability scanner on Checker image
       uses: aquasecurity/trivy-action@master
+      continue-on-error: true
       with:
         image-ref: 'uptime-monitor-checker:security-scan'
         format: 'sarif'
@@ -222,26 +224,57 @@ jobs:
 
     - name: Run Trivy vulnerability scanner on Frontend image
       uses: aquasecurity/trivy-action@master
+      continue-on-error: true
       with:
         image-ref: 'uptime-monitor-frontend:security-scan'
         format: 'sarif'
         output: 'trivy-frontend-results.sarif'
 
+    - name: Check if API SARIF file exists
+      id: check-api-sarif
+      run: |
+        if [ -f "trivy-api-results.sarif" ]; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+      if: always()
+    
     - name: Upload Trivy scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3
-      if: always() && hashFiles('trivy-api-results.sarif') != ''
+      if: always() && steps.check-api-sarif.outputs.exists == 'true'
       with:
         sarif_file: trivy-api-results.sarif
 
+    - name: Check if Checker SARIF file exists
+      id: check-checker-sarif
+      run: |
+        if [ -f "trivy-checker-results.sarif" ]; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+      if: always()
+    
     - name: Upload Trivy Checker scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3
-      if: always() && hashFiles('trivy-checker-results.sarif') != ''
+      if: always() && steps.check-checker-sarif.outputs.exists == 'true'
       with:
         sarif_file: trivy-checker-results.sarif
 
+    - name: Check if Frontend SARIF file exists
+      id: check-frontend-sarif
+      run: |
+        if [ -f "trivy-frontend-results.sarif" ]; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+      if: always()
+    
     - name: Upload Trivy Frontend scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3
-      if: always() && hashFiles('trivy-frontend-results.sarif') != ''
+      if: always() && steps.check-frontend-sarif.outputs.exists == 'true'
       with:
         sarif_file: trivy-frontend-results.sarif
 

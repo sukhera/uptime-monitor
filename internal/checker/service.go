@@ -8,15 +8,15 @@ import (
 	"sync"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
 	"github.com/sukhera/uptime-monitor/internal/database"
 	"github.com/sukhera/uptime-monitor/internal/models"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 const (
-	statusDown         = "down"
-	statusOperational  = "operational"
-	statusDegraded     = "degraded"
+	statusDown        = "down"
+	statusOperational = "operational"
+	statusDegraded    = "degraded"
 )
 
 type Service struct {
@@ -75,9 +75,9 @@ func (s *Service) checkURL(service models.Service, wg *sync.WaitGroup, statusLog
 	defer wg.Done()
 
 	statusLog := s.checkService(service)
-	log.Printf("[INFO] %s: %s (status: %d, latency: %dms)", 
+	log.Printf("[INFO] %s: %s (status: %d, latency: %dms)",
 		service.Name, statusLog.Status, statusLog.StatusCode, statusLog.Latency)
-	
+
 	statusLogs <- statusLog
 }
 
@@ -117,7 +117,7 @@ func (s *Service) checkService(service models.Service) models.StatusLog {
 
 		lastErr = err
 		if attempt < maxRetries {
-			log.Printf("[WARN] Attempt %d failed for %s, retrying in %v: %v", 
+			log.Printf("[WARN] Attempt %d failed for %s, retrying in %v: %v",
 				attempt, service.Name, retryDelay, err)
 			time.Sleep(retryDelay)
 		}

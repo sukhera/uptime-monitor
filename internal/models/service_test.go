@@ -35,7 +35,7 @@ func TestService_JSONSerialization(t *testing.T) {
 func TestService_BSONSerialization(t *testing.T) {
 	service := Service{
 		Name:           "test-service",
-		Slug:           "test-service", 
+		Slug:           "test-service",
 		URL:            "https://example.com",
 		Headers:        map[string]string{"Authorization": "Bearer token"},
 		ExpectedStatus: 200,
@@ -195,7 +195,7 @@ func TestService_EmptyHeaders(t *testing.T) {
 	if unmarshaled.Headers == nil {
 		unmarshaled.Headers = make(map[string]string)
 	}
-	
+
 	assert.NotNil(t, unmarshaled.Headers)
 	assert.Len(t, unmarshaled.Headers, 0)
 }

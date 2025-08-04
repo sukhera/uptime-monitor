@@ -10,7 +10,7 @@ import (
 func TestNewConnection_InvalidURI(t *testing.T) {
 	// Test with invalid MongoDB URI
 	db, err := NewConnection("invalid://uri", "testdb")
-	
+
 	assert.Error(t, err)
 	assert.Nil(t, db)
 }
@@ -18,7 +18,7 @@ func TestNewConnection_InvalidURI(t *testing.T) {
 func TestDB_CollectionMethods(t *testing.T) {
 	// Test that DB methods work with a valid DB struct
 	// Note: This doesn't actually connect to MongoDB, just tests the struct methods
-	
+
 	db := &DB{
 		Client: nil, // We won't actually connect
 		Name:   "testdb",
@@ -34,7 +34,7 @@ func TestDB_CollectionMethods(t *testing.T) {
 func TestDB_InterfaceCompliance(t *testing.T) {
 	// Test that DB implements Interface
 	var _ Interface = (*DB)(nil)
-	
+
 	// This will fail to compile if DB doesn't implement Interface
 	assert.True(t, true, "DB implements Interface")
 }
@@ -43,7 +43,7 @@ func TestNewConnection_EmptyDatabase(t *testing.T) {
 	// Test with empty database name - should still work
 	// Note: This will fail without a real MongoDB instance
 	db, err := NewConnection("mongodb://nonexistent:27017", "")
-	
+
 	// Expect error since we can't connect to nonexistent MongoDB
 	assert.Error(t, err)
 	assert.Nil(t, db)
@@ -62,12 +62,12 @@ func TestNewConnection_Integration(t *testing.T) {
 	dbName := "test_integration"
 
 	db, err := NewConnection(mongoURI, dbName)
-	
+
 	if err != nil {
 		t.Skipf("MongoDB not available for integration test: %v", err)
 		return
 	}
-	
+
 	require.NotNil(t, db)
 	defer db.Close()
 

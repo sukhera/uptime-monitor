@@ -5,7 +5,7 @@ go 1.24
 require (
 	github.com/go-co-op/gocron v1.35.3
 	github.com/gorilla/mux v1.8.0
-	github.com/rs/cors v1.10.1
+	github.com/rs/cors v1.11.1
 	github.com/stretchr/testify v1.8.2
 	go.mongodb.org/mongo-driver v1.12.1
 )
