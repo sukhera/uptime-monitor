@@ -47,7 +47,9 @@ func TestService_checkService(t *testing.T) {
 				// Verify headers were set
 				assert.Equal(t, "Bearer token", r.Header.Get("Authorization"))
 				w.WriteHeader(200)
-				w.Write([]byte("OK"))
+				if _, err := w.Write([]byte("OK")); err != nil {
+					t.Errorf("Failed to write response: %v", err)
+				}
 			},
 			expectedStatus: "operational",
 		},
@@ -268,7 +270,7 @@ func TestService_Integration(t *testing.T) {
 	// Test a simple service check
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	}))
 	defer server.Close()
 

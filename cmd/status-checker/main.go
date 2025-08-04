@@ -51,7 +51,7 @@ func main() {
 	checkerService := checker.NewService(db)
 	scheduler := gocron.NewScheduler(time.UTC)
 
-	scheduler.Every(cfg.CheckInterval).Do(func() {
+	_, err = scheduler.Every(cfg.CheckInterval).Do(func() {
 		ctx := context.Background()
 		log.Println("[INFO] Running health checks...")
 		
@@ -59,6 +59,9 @@ func main() {
 			log.Printf("[ERROR] Error running health checks: %v", err)
 		}
 	})
+	if err != nil {
+		log.Fatalf("[ERROR] Failed to schedule health checks: %v", err)
+	}
 
 	log.Println("[INFO] Status checker started successfully")
 	scheduler.StartBlocking()

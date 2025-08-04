@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -48,17 +49,25 @@ func TestCheckerService_Integration(t *testing.T) {
 		switch r.URL.Path {
 		case "/healthy":
 			w.WriteHeader(200)
-			w.Write([]byte("OK"))
+			if _, err := w.Write([]byte("OK")); err != nil {
+				log.Printf("Failed to write response: %v", err)
+			}
 		case "/slow":
 			time.Sleep(100 * time.Millisecond)
 			w.WriteHeader(200)
-			w.Write([]byte("Slow but OK"))
+			if _, err := w.Write([]byte("Slow but OK")); err != nil {
+				log.Printf("Failed to write response: %v", err)
+			}
 		case "/error":
 			w.WriteHeader(500)
-			w.Write([]byte("Internal Server Error"))
+			if _, err := w.Write([]byte("Internal Server Error")); err != nil {
+				log.Printf("Failed to write response: %v", err)
+			}
 		default:
 			w.WriteHeader(404)
-			w.Write([]byte("Not Found"))
+			if _, err := w.Write([]byte("Not Found")); err != nil {
+				log.Printf("Failed to write response: %v", err)
+			}
 		}
 	}))
 	defer testServer.Close()
@@ -188,7 +197,9 @@ func TestCheckerService_ConcurrentChecks(t *testing.T) {
 		requestCount++
 		time.Sleep(50 * time.Millisecond) // Small delay to test concurrency
 		w.WriteHeader(200)
-		w.Write([]byte("OK"))
+		if _, err := w.Write([]byte("OK")); err != nil {
+			log.Printf("Failed to write response: %v", err)
+		}
 	}))
 	defer testServer.Close()
 

@@ -54,16 +54,30 @@ func TestService_BSONSerialization(t *testing.T) {
 	assert.Equal(t, service, unmarshaled)
 }
 
-func TestStatusLog_JSONSerialization(t *testing.T) {
-	now := time.Now()
-	statusLog := StatusLog{
+// createTestStatusLog creates a test StatusLog for serialization tests
+func createTestStatusLog() StatusLog {
+	return StatusLog{
 		ServiceName: "test-service",
 		Status:      "operational",
 		Latency:     150,
 		StatusCode:  200,
 		Error:       "",
-		Timestamp:   now,
+		Timestamp:   time.Now(),
 	}
+}
+
+// assertStatusLogEqual compares two StatusLog instances with time tolerance
+func assertStatusLogEqual(t *testing.T, expected, actual StatusLog) {
+	assert.Equal(t, expected.ServiceName, actual.ServiceName)
+	assert.Equal(t, expected.Status, actual.Status)
+	assert.Equal(t, expected.Latency, actual.Latency)
+	assert.Equal(t, expected.StatusCode, actual.StatusCode)
+	assert.Equal(t, expected.Error, actual.Error)
+	assert.WithinDuration(t, expected.Timestamp, actual.Timestamp, time.Second)
+}
+
+func TestStatusLog_JSONSerialization(t *testing.T) {
+	statusLog := createTestStatusLog()
 
 	// Test JSON marshaling
 	jsonData, err := json.Marshal(statusLog)
@@ -75,24 +89,11 @@ func TestStatusLog_JSONSerialization(t *testing.T) {
 	require.NoError(t, err)
 
 	// Compare with some tolerance for time precision
-	assert.Equal(t, statusLog.ServiceName, unmarshaled.ServiceName)
-	assert.Equal(t, statusLog.Status, unmarshaled.Status)
-	assert.Equal(t, statusLog.Latency, unmarshaled.Latency)
-	assert.Equal(t, statusLog.StatusCode, unmarshaled.StatusCode)
-	assert.Equal(t, statusLog.Error, unmarshaled.Error)
-	assert.WithinDuration(t, statusLog.Timestamp, unmarshaled.Timestamp, time.Second)
+	assertStatusLogEqual(t, statusLog, unmarshaled)
 }
 
 func TestStatusLog_BSONSerialization(t *testing.T) {
-	now := time.Now()
-	statusLog := StatusLog{
-		ServiceName: "test-service",
-		Status:      "operational", 
-		Latency:     150,
-		StatusCode:  200,
-		Error:       "",
-		Timestamp:   now,
-	}
+	statusLog := createTestStatusLog()
 
 	// Test BSON marshaling
 	bsonData, err := bson.Marshal(statusLog)
@@ -103,12 +104,7 @@ func TestStatusLog_BSONSerialization(t *testing.T) {
 	err = bson.Unmarshal(bsonData, &unmarshaled)
 	require.NoError(t, err)
 
-	assert.Equal(t, statusLog.ServiceName, unmarshaled.ServiceName)
-	assert.Equal(t, statusLog.Status, unmarshaled.Status)
-	assert.Equal(t, statusLog.Latency, unmarshaled.Latency)
-	assert.Equal(t, statusLog.StatusCode, unmarshaled.StatusCode)
-	assert.Equal(t, statusLog.Error, unmarshaled.Error)
-	assert.WithinDuration(t, statusLog.Timestamp, unmarshaled.Timestamp, time.Second)
+	assertStatusLogEqual(t, statusLog, unmarshaled)
 }
 
 func TestStatusLog_WithError(t *testing.T) {

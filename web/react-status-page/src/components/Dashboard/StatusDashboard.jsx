@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import ServiceCard from './ServiceCard';

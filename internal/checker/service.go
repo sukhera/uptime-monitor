@@ -13,12 +13,18 @@ import (
 	"github.com/sukhera/uptime-monitor/internal/models"
 )
 
+const (
+	statusDown         = "down"
+	statusOperational  = "operational"
+	statusDegraded     = "degraded"
+)
+
 type Service struct {
-	db     database.DatabaseInterface
+	db     database.Interface
 	client *http.Client
 }
 
-func NewService(db database.DatabaseInterface) *Service {
+func NewService(db database.Interface) *Service {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
@@ -124,7 +130,7 @@ func (s *Service) checkService(service models.Service) models.StatusLog {
 	}
 
 	if lastErr != nil && resp == nil {
-		statusLog.Status = "down"
+		statusLog.Status = statusDown
 		statusLog.Error = fmt.Sprintf("Request failed after %d attempts: %v", maxRetries, lastErr)
 		log.Printf("[ERROR] Request failed for %s after %d attempts: %v", service.Name, maxRetries, lastErr)
 		return statusLog
@@ -134,11 +140,11 @@ func (s *Service) checkService(service models.Service) models.StatusLog {
 	statusLog.StatusCode = resp.StatusCode
 
 	if resp.StatusCode == service.ExpectedStatus {
-		statusLog.Status = "operational"
+		statusLog.Status = statusOperational
 	} else if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		statusLog.Status = "degraded"
+		statusLog.Status = statusDegraded
 	} else {
-		statusLog.Status = "down"
+		statusLog.Status = statusDown
 		statusLog.Error = fmt.Sprintf("Unexpected status code: %d", resp.StatusCode)
 	}
 

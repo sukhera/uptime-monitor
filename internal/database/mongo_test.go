@@ -32,11 +32,11 @@ func TestDB_CollectionMethods(t *testing.T) {
 }
 
 func TestDB_InterfaceCompliance(t *testing.T) {
-	// Test that DB implements DatabaseInterface
-	var _ DatabaseInterface = (*DB)(nil)
+	// Test that DB implements Interface
+	var _ Interface = (*DB)(nil)
 	
-	// This will fail to compile if DB doesn't implement DatabaseInterface
-	assert.True(t, true, "DB implements DatabaseInterface")
+	// This will fail to compile if DB doesn't implement Interface
+	assert.True(t, true, "DB implements Interface")
 }
 
 func TestNewConnection_EmptyDatabase(t *testing.T) {

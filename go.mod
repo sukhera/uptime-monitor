@@ -1,6 +1,6 @@
 module github.com/sukhera/uptime-monitor
 
-go 1.21
+go 1.22
 
 require (
 	github.com/go-co-op/gocron v1.35.3

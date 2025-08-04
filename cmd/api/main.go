@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/sukhera/uptime-monitor/internal/api/routes"
 	"github.com/sukhera/uptime-monitor/internal/config"
@@ -21,6 +22,14 @@ func main() {
 	router := routes.Setup(db)
 	handler := routes.WithMiddleware(router)
 
+	server := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      handler,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
 	log.Printf("API server starting on port %s", cfg.Port)
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, handler))
+	log.Fatal(server.ListenAndServe())
 }

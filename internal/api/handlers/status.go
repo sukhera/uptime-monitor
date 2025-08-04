@@ -23,7 +23,7 @@ func NewStatusHandler(db *database.DB) *StatusHandler {
 	return &StatusHandler{db: db}
 }
 
-func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
+func (h *StatusHandler) GetStatus(w http.ResponseWriter, _ *http.Request) {
 	ctx := context.Background()
 
 	opts := options.Find().SetSort(bson.D{{"timestamp", -1}}).SetLimit(100)
@@ -69,10 +69,14 @@ func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(statuses)
+	if err := json.NewEncoder(w).Encode(statuses); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
-func (h *StatusHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
+func (h *StatusHandler) HealthCheck(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "healthy"}); err != nil {
+		log.Printf("Error encoding health check response: %v", err)
+	}
 }
