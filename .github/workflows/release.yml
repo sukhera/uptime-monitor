@@ -1,0 +1,444 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.2.3)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        default: false
+        type: boolean
+      draft:
+        description: 'Create as draft release'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  packages: write
+  deployments: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: sukhera/uptime-monitor
+
+jobs:
+  # Validate Release
+  validate-release:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Determine version
+      id: version
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          VERSION="${{ github.event.inputs.version }}"
+          IS_PRERELEASE="${{ github.event.inputs.prerelease }}"
+        else
+          VERSION="${GITHUB_REF#refs/tags/}"
+          # Check if this is a pre-release (contains alpha, beta, rc)
+          if [[ "$VERSION" =~ (alpha|beta|rc) ]]; then
+            IS_PRERELEASE="true"
+          else
+            IS_PRERELEASE="false"
+          fi
+        fi
+        
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+        echo "Release version: $VERSION"
+        echo "Is pre-release: $IS_PRERELEASE"
+
+    - name: Validate version format
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+(\.[0-9]+)?)?$ ]]; then
+          echo "❌ Invalid version format: $VERSION"
+          echo "Expected format: v1.2.3 or v1.2.3-alpha.1"
+          exit 1
+        fi
+        echo "✅ Version format is valid: $VERSION"
+
+    - name: Check if tag exists (for workflow_dispatch)
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        if git tag --list | grep -q "^$VERSION$"; then
+          echo "❌ Tag $VERSION already exists"
+          exit 1
+        fi
+        echo "✅ Tag $VERSION is available"
+
+  # Run Tests Before Release
+  test-before-release:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: validate-release
+    
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+        cache: true
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: web/react-status-page/package-lock.json
+
+    - name: Install Go dependencies
+      run: go mod download
+
+    - name: Install Node.js dependencies
+      run: |
+        cd web/react-status-page
+        npm ci
+
+    - name: Run Go tests
+      run: |
+        go test -v -race -coverprofile=coverage.out ./...
+        go tool cover -func=coverage.out
+
+    - name: Run Go linter
+      uses: golangci/golangci-lint-action@v4
+      with:
+        version: latest
+
+    - name: Build frontend
+      run: |
+        cd web/react-status-page
+        npm run build
+
+    - name: Run frontend linter
+      run: |
+        cd web/react-status-page
+        npm run lint
+
+    - name: Test Docker builds
+      run: |
+        docker build -f configs/docker/Dockerfile.api -t test-api .
+        docker build -f configs/docker/Dockerfile.status-checker -t test-checker .
+        docker build -f web/react-status-page/Dockerfile -t test-frontend ./web/react-status-page
+
+  # Build Release Artifacts
+  build-artifacts:
+    name: Build Release Artifacts
+    runs-on: ubuntu-latest
+    needs: [validate-release, test-before-release]
+    outputs:
+      api-image: ${{ steps.images.outputs.api-image }}
+      checker-image: ${{ steps.images.outputs.checker-image }}
+      frontend-image: ${{ steps.images.outputs.frontend-image }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+        cache: true
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: web/react-status-page/package-lock.json
+
+    - name: Build Go binaries
+      run: |
+        VERSION="${{ needs.validate-release.outputs.version }}"
+        
+        # Build for multiple platforms
+        PLATFORMS="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64"
+        
+        mkdir -p dist
+        
+        for platform in $PLATFORMS; do
+          GOOS=${platform%/*}
+          GOARCH=${platform#*/}
+          
+          echo "Building for $GOOS/$GOARCH..."
+          
+          # Build API server
+          CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build \
+            -ldflags "-X main.version=$VERSION -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o "dist/uptime-monitor-api-${GOOS}-${GOARCH}$([ "$GOOS" = "windows" ] && echo ".exe" || echo "")" \
+            ./cmd/api
+          
+          # Build status checker
+          CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build \
+            -ldflags "-X main.version=$VERSION -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o "dist/uptime-monitor-checker-${GOOS}-${GOARCH}$([ "$GOOS" = "windows" ] && echo ".exe" || echo "")" \
+            ./cmd/status-checker
+        done
+
+    - name: Build frontend
+      run: |
+        cd web/react-status-page
+        npm ci
+        npm run build
+        
+        # Create frontend archive
+        tar -czf ../../dist/uptime-monitor-frontend.tar.gz -C dist .
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set image tags
+      id: images
+      run: |
+        VERSION="${{ needs.validate-release.outputs.version }}"
+        echo "api-image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api:${VERSION}" >> $GITHUB_OUTPUT
+        echo "checker-image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-checker:${VERSION}" >> $GITHUB_OUTPUT
+        echo "frontend-image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${VERSION}" >> $GITHUB_OUTPUT
+
+    - name: Build and push Docker images
+      run: |
+        VERSION="${{ needs.validate-release.outputs.version }}"
+        
+        # Build and push API image
+        docker buildx build \
+          --platform linux/amd64,linux/arm64 \
+          --file configs/docker/Dockerfile.api \
+          --tag "${{ steps.images.outputs.api-image }}" \
+          --tag "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api:latest" \
+          --push .
+        
+        # Build and push Status Checker image
+        docker buildx build \
+          --platform linux/amd64,linux/arm64 \
+          --file configs/docker/Dockerfile.status-checker \
+          --tag "${{ steps.images.outputs.checker-image }}" \
+          --tag "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-checker:latest" \
+          --push .
+        
+        # Build and push Frontend image
+        docker buildx build \
+          --platform linux/amd64,linux/arm64 \
+          --file web/react-status-page/Dockerfile \
+          --tag "${{ steps.images.outputs.frontend-image }}" \
+          --tag "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest" \
+          --push ./web/react-status-page
+
+    - name: Create checksums
+      run: |
+        cd dist
+        sha256sum * > checksums.txt
+        echo "Generated checksums:"
+        cat checksums.txt
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-artifacts
+        path: dist/
+
+  # Generate Changelog
+  generate-changelog:
+    name: Generate Changelog
+    runs-on: ubuntu-latest
+    needs: validate-release
+    outputs:
+      changelog: ${{ steps.changelog.outputs.changelog }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        VERSION="${{ needs.validate-release.outputs.version }}"
+        
+        # Get the previous tag
+        PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v "$VERSION" | head -n1)
+        
+        if [ -z "$PREVIOUS_TAG" ]; then
+          echo "No previous tag found, using initial commit"
+          PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+        fi
+        
+        echo "Generating changelog from $PREVIOUS_TAG to $VERSION"
+        
+        # Generate changelog
+        CHANGELOG=$(cat <<EOF
+        ## What's Changed
+        
+        $(git log --pretty=format:"* %s (%h)" --no-merges $PREVIOUS_TAG..HEAD | head -50)
+        
+        ## Docker Images
+        
+        * \`ghcr.io/sukhera/uptime-monitor-api:$VERSION\`
+        * \`ghcr.io/sukhera/uptime-monitor-checker:$VERSION\`
+        * \`ghcr.io/sukhera/uptime-monitor-frontend:$VERSION\`
+        
+        ## Installation
+        
+        ### Using Docker Compose
+        \`\`\`bash
+        # Download the release
+        curl -L -o docker-compose.yml https://github.com/sukhera/uptime-monitor/releases/download/$VERSION/docker-compose.yml
+        
+        # Start the services
+        docker-compose up -d
+        \`\`\`
+        
+        ### Using Binaries
+        Download the appropriate binary for your platform from the assets below.
+        
+        ## Verification
+        Verify the integrity of downloaded files using the provided checksums.
+        
+        **Full Changelog**: https://github.com/sukhera/uptime-monitor/compare/$PREVIOUS_TAG...$VERSION
+        EOF
+        )
+        
+        # Save changelog to output (escape newlines)
+        {
+          echo "changelog<<EOF"
+          echo "$CHANGELOG"
+          echo "EOF"
+        } >> $GITHUB_OUTPUT
+
+  # Create GitHub Release
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate-release, build-artifacts, generate-changelog]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: release-artifacts
+        path: dist/
+
+    - name: Create git tag (for workflow_dispatch)
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        VERSION="${{ needs.validate-release.outputs.version }}"
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git tag -a "$VERSION" -m "Release $VERSION"
+        git push origin "$VERSION"
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ needs.validate-release.outputs.version }}
+        name: ${{ needs.validate-release.outputs.version }}
+        body: ${{ needs.generate-changelog.outputs.changelog }}
+        draft: ${{ github.event.inputs.draft == 'true' }}
+        prerelease: ${{ needs.validate-release.outputs.is_prerelease == 'true' }}
+        files: |
+          dist/*
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Deploy Release (Production)
+  deploy-release:
+    name: Deploy Release
+    runs-on: ubuntu-latest
+    needs: [validate-release, create-release]
+    if: needs.validate-release.outputs.is_prerelease == 'false'
+    environment: 
+      name: production
+      url: https://uptime-monitor.com
+    
+    steps:
+    - name: Deploy to production
+      run: |
+        echo "Deploying ${{ needs.validate-release.outputs.version }} to production..."
+        # This would typically trigger your production deployment
+        # For example:
+        # - Update Kubernetes manifests
+        # - Trigger CD pipeline
+        # - Update deployment configuration
+        echo "Production deployment completed!"
+
+  # Notify Release
+  notify-release:
+    name: Notify Release
+    runs-on: ubuntu-latest
+    needs: [validate-release, create-release, deploy-release]
+    if: always() && needs.create-release.result == 'success'
+    
+    steps:
+    - name: Send release notification
+      run: |
+        VERSION="${{ needs.validate-release.outputs.version }}"
+        IS_PRERELEASE="${{ needs.validate-release.outputs.is_prerelease }}"
+        DEPLOY_STATUS="${{ needs.deploy-release.result }}"
+        
+        if [ "$IS_PRERELEASE" = "true" ]; then
+          RELEASE_TYPE="Pre-release"
+          EMOJI="🚧"
+        else
+          RELEASE_TYPE="Release"
+          EMOJI="🚀"
+        fi
+        
+        echo "$EMOJI $RELEASE_TYPE $VERSION has been published!"
+        echo "📦 GitHub Release: https://github.com/sukhera/uptime-monitor/releases/tag/$VERSION"
+        
+        if [ "$IS_PRERELEASE" = "false" ]; then
+          if [ "$DEPLOY_STATUS" = "success" ]; then
+            echo "✅ Production deployment: Successful"
+          else
+            echo "❌ Production deployment: Failed"
+          fi
+        fi
+        
+        # This would typically send notifications to:
+        # - Slack/Discord channels
+        # - Email lists
+        # - Update documentation sites
+        # - Notify package managers

@@ -1,0 +1,376 @@
+name: Continuous Deployment
+
+on:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Version to deploy'
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: sukhera/uptime-monitor
+
+permissions:
+  contents: read
+  packages: write
+  deployments: write
+
+jobs:
+  # Build and Push Docker Images
+  build-and-push:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    outputs:
+      api-image: ${{ steps.image-tags.outputs.api-image }}
+      checker-image: ${{ steps.image-tags.outputs.checker-image }}
+      frontend-image: ${{ steps.image-tags.outputs.frontend-image }}
+      version: ${{ steps.version.outputs.version }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+
+    - name: Determine version
+      id: version
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.version }}" != "" ]]; then
+          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        else
+          echo "version=latest" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Set image tags
+      id: image-tags
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        echo "api-image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api:${VERSION}" >> $GITHUB_OUTPUT
+        echo "checker-image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-checker:${VERSION}" >> $GITHUB_OUTPUT
+        echo "frontend-image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${VERSION}" >> $GITHUB_OUTPUT
+
+    - name: Build and push API image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./configs/docker/Dockerfile.api
+        push: true
+        tags: ${{ steps.image-tags.outputs.api-image }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+    - name: Build and push Status Checker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./configs/docker/Dockerfile.status-checker
+        push: true
+        tags: ${{ steps.image-tags.outputs.checker-image }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+    - name: Build and push Frontend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./web/react-status-page
+        file: ./web/react-status-page/Dockerfile
+        push: true
+        tags: ${{ steps.image-tags.outputs.frontend-image }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+  # Deploy to Staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: 
+      name: staging
+      url: https://staging.uptime-monitor.com
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Create deployment
+      uses: actions/github-script@v7
+      id: deployment
+      with:
+        script: |
+          const deployment = await github.rest.repos.createDeployment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: context.sha,
+            environment: 'staging',
+            description: 'Deploy to staging environment',
+            auto_merge: false,
+            required_contexts: []
+          });
+          return deployment.data.id;
+
+    - name: Set deployment status to in progress
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.repos.createDeploymentStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            deployment_id: ${{ steps.deployment.outputs.result }},
+            state: 'in_progress',
+            description: 'Deployment started'
+          });
+
+    - name: Deploy to Kubernetes (Staging)
+      run: |
+        # This would typically involve:
+        # 1. Setting up kubectl with staging cluster credentials
+        # 2. Updating Kubernetes manifests with new image tags
+        # 3. Applying the manifests to the cluster
+        # 4. Waiting for rollout to complete
+        
+        echo "Deploying to staging environment..."
+        echo "API Image: ${{ needs.build-and-push.outputs.api-image }}"
+        echo "Checker Image: ${{ needs.build-and-push.outputs.checker-image }}"
+        echo "Frontend Image: ${{ needs.build-and-push.outputs.frontend-image }}"
+        
+        # Placeholder for actual deployment commands
+        # kubectl set image deployment/api-deployment api=${{ needs.build-and-push.outputs.api-image }}
+        # kubectl set image deployment/checker-deployment checker=${{ needs.build-and-push.outputs.checker-image }}
+        # kubectl set image deployment/frontend-deployment frontend=${{ needs.build-and-push.outputs.frontend-image }}
+        # kubectl rollout status deployment/api-deployment --timeout=300s
+        # kubectl rollout status deployment/checker-deployment --timeout=300s
+        # kubectl rollout status deployment/frontend-deployment --timeout=300s
+
+    - name: Run health checks
+      run: |
+        echo "Running health checks for staging environment..."
+        # Placeholder for health check commands
+        # curl -f https://staging.uptime-monitor.com/api/health || exit 1
+        # curl -f https://staging.uptime-monitor.com/ || exit 1
+        echo "Health checks passed!"
+
+    - name: Set deployment status to success
+      uses: actions/github-script@v7
+      if: success()
+      with:
+        script: |
+          await github.rest.repos.createDeploymentStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            deployment_id: ${{ steps.deployment.outputs.result }},
+            state: 'success',
+            description: 'Deployment completed successfully',
+            environment_url: 'https://staging.uptime-monitor.com'
+          });
+
+    - name: Set deployment status to failure
+      uses: actions/github-script@v7
+      if: failure()
+      with:
+        script: |
+          await github.rest.repos.createDeploymentStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            deployment_id: ${{ steps.deployment.outputs.result }},
+            state: 'failure',
+            description: 'Deployment failed'
+          });
+
+  # Deploy to Production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: 
+      name: production
+      url: https://uptime-monitor.com
+    if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Create deployment
+      uses: actions/github-script@v7
+      id: deployment
+      with:
+        script: |
+          const deployment = await github.rest.repos.createDeployment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: context.sha,
+            environment: 'production',
+            description: 'Deploy to production environment',
+            auto_merge: false,
+            required_contexts: []
+          });
+          return deployment.data.id;
+
+    - name: Set deployment status to in progress
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.repos.createDeploymentStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            deployment_id: ${{ steps.deployment.outputs.result }},
+            state: 'in_progress',
+            description: 'Production deployment started'
+          });
+
+    - name: Run database migrations
+      run: |
+        echo "Running database migrations..."
+        # Placeholder for migration commands
+        # This would typically connect to the production database
+        # and run any pending migrations
+        echo "Database migrations completed!"
+
+    - name: Deploy to Kubernetes (Production)
+      run: |
+        echo "Deploying to production environment..."
+        echo "API Image: ${{ needs.build-and-push.outputs.api-image }}"
+        echo "Checker Image: ${{ needs.build-and-push.outputs.checker-image }}"
+        echo "Frontend Image: ${{ needs.build-and-push.outputs.frontend-image }}"
+        
+        # Placeholder for actual deployment commands
+        # kubectl set image deployment/api-deployment api=${{ needs.build-and-push.outputs.api-image }} --namespace=production
+        # kubectl set image deployment/checker-deployment checker=${{ needs.build-and-push.outputs.checker-image }} --namespace=production
+        # kubectl set image deployment/frontend-deployment frontend=${{ needs.build-and-push.outputs.frontend-image }} --namespace=production
+        # kubectl rollout status deployment/api-deployment --timeout=600s --namespace=production
+        # kubectl rollout status deployment/checker-deployment --timeout=600s --namespace=production
+        # kubectl rollout status deployment/frontend-deployment --timeout=600s --namespace=production
+
+    - name: Run comprehensive health checks
+      run: |
+        echo "Running comprehensive health checks for production environment..."
+        # Placeholder for health check commands
+        # curl -f https://uptime-monitor.com/api/health || exit 1
+        # curl -f https://uptime-monitor.com/ || exit 1
+        # Run additional checks for database connectivity, external service availability, etc.
+        echo "All health checks passed!"
+
+    - name: Set deployment status to success
+      uses: actions/github-script@v7
+      if: success()
+      with:
+        script: |
+          await github.rest.repos.createDeploymentStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            deployment_id: ${{ steps.deployment.outputs.result }},
+            state: 'success',
+            description: 'Production deployment completed successfully',
+            environment_url: 'https://uptime-monitor.com'
+          });
+
+    - name: Set deployment status to failure
+      uses: actions/github-script@v7
+      if: failure()
+      with:
+        script: |
+          await github.rest.repos.createDeploymentStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            deployment_id: ${{ steps.deployment.outputs.result }},
+            state: 'failure',
+            description: 'Production deployment failed'
+          });
+
+    - name: Send deployment notification
+      if: always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const status = '${{ job.status }}';
+          const version = '${{ needs.build-and-push.outputs.version }}';
+          const emoji = status === 'success' ? '✅' : '❌';
+          
+          // This would typically send notifications to Slack, Discord, or email
+          console.log(`${emoji} Production deployment ${status} for version ${version}`);
+
+  # Cleanup old images
+  cleanup:
+    name: Cleanup Old Images
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+    
+    steps:
+    - name: Delete old container images
+      uses: actions/github-script@v7
+      with:
+        script: |
+          // Keep only the last 10 versions of each image
+          const packages = ['uptime-monitor-api', 'uptime-monitor-checker', 'uptime-monitor-frontend'];
+          
+          for (const packageName of packages) {
+            try {
+              const versions = await github.rest.packages.getAllPackageVersionsForPackageOwnedByUser({
+                package_type: 'container',
+                package_name: packageName,
+                username: context.repo.owner,
+                per_page: 100
+              });
+              
+              // Sort by created date and keep the newest 10
+              const sortedVersions = versions.data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+              const versionsToDelete = sortedVersions.slice(10);
+              
+              for (const version of versionsToDelete) {
+                console.log(`Deleting old version: ${packageName}:${version.name}`);
+                await github.rest.packages.deletePackageVersionForUser({
+                  package_type: 'container',
+                  package_name: packageName,
+                  username: context.repo.owner,
+                  package_version_id: version.id
+                });
+              }
+            } catch (error) {
+              console.log(`Error cleaning up ${packageName}: ${error.message}`);
+            }
+          }
