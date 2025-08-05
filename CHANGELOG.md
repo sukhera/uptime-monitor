@@ -43,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Skip MongoDB connection tests that can hang in CI environment
   - Add explicit timeout to test commands to prevent hanging
   - Resolve 60-second timeout issues in container and database tests
+- **Fix high-severity path injection vulnerability**
+  - Add comprehensive path validation in web server static file handler
+  - Prevent path traversal attacks by blocking ".." sequences
+  - Implement absolute path validation to ensure files are served from static directory
+  - Add proper error handling for invalid paths and internal errors
 
 ## [0.4.0] - 2025-08-04
 

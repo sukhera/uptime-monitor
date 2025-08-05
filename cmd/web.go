@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -74,8 +75,43 @@ func runWeb(cmd *cobra.Command, args []string) {
 
 	// Serve static files
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Validate and sanitize the requested path
+		requestedPath := r.URL.Path
+
+		// Prevent path traversal attacks by ensuring the path doesn't contain ".."
+		if strings.Contains(requestedPath, "..") {
+			http.Error(w, "Invalid path", http.StatusBadRequest)
+			return
+		}
+
+		// Ensure the path starts with "/" and normalize it
+		if !strings.HasPrefix(requestedPath, "/") {
+			requestedPath = "/" + requestedPath
+		}
+
+		// Construct the file path safely
+		filePath := filepath.Join(staticDir, requestedPath)
+
+		// Additional security check: ensure the resolved path is within the static directory
+		absStaticDir, err := filepath.Abs(staticDir)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		absFilePath, err := filepath.Abs(filePath)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		// Ensure the file path is within the static directory
+		if !strings.HasPrefix(absFilePath, absStaticDir) {
+			http.Error(w, "Invalid path", http.StatusBadRequest)
+			return
+		}
+
 		// Check if the file exists
-		filePath := filepath.Join(staticDir, r.URL.Path)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			// File doesn't exist, serve index.html for SPA routing
 			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
