@@ -23,8 +23,8 @@ type Error interface {
 	Cause() error
 }
 
-// ErrorImpl implements the Error interface
-type ErrorImpl struct {
+// CustomError implements the Error interface
+type CustomError struct {
 	kind  ErrorKind
 	cause error
 	msg   string
@@ -32,7 +32,7 @@ type ErrorImpl struct {
 
 // New creates a new error
 func New(msg string, kind ErrorKind) Error {
-	return &ErrorImpl{
+	return &CustomError{
 		kind: kind,
 		msg:  msg,
 	}
@@ -40,7 +40,7 @@ func New(msg string, kind ErrorKind) Error {
 
 // NewWithCause creates a new error with a cause
 func NewWithCause(msg string, kind ErrorKind, cause error) Error {
-	return &ErrorImpl{
+	return &CustomError{
 		kind:  kind,
 		msg:   msg,
 		cause: cause,
@@ -78,12 +78,12 @@ func NewForbiddenError(msg string) Error {
 }
 
 // Kind returns the error kind
-func (e *ErrorImpl) Kind() ErrorKind {
+func (e *CustomError) Kind() ErrorKind {
 	return e.kind
 }
 
 // Error returns the error message
-func (e *ErrorImpl) Error() string {
+func (e *CustomError) Error() string {
 	if e.cause != nil {
 		return fmt.Sprintf("%s: %v", e.msg, e.cause)
 	}
@@ -91,7 +91,7 @@ func (e *ErrorImpl) Error() string {
 }
 
 // Cause returns the underlying cause
-func (e *ErrorImpl) Cause() error {
+func (e *CustomError) Cause() error {
 	return e.cause
 }
 

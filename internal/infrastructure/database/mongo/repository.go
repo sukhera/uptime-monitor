@@ -82,7 +82,12 @@ func (r *ServiceRepository) GetAll(ctx context.Context) ([]*service.Service, err
 	if err != nil {
 		return nil, errors.NewWithCause("failed to find services", errors.ErrorKindInternal, err)
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			// Log error but don't fail the operation
+			fmt.Printf("Error closing cursor: %v\n", err)
+		}
+	}()
 
 	var services []*service.Service
 	if err = cursor.All(ctx, &services); err != nil {
@@ -99,7 +104,12 @@ func (r *ServiceRepository) GetEnabled(ctx context.Context) ([]*service.Service,
 	if err != nil {
 		return nil, errors.NewWithCause("failed to find enabled services", errors.ErrorKindInternal, err)
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			// Log error but don't fail the operation
+			fmt.Printf("Error closing cursor: %v\n", err)
+		}
+	}()
 
 	var services []*service.Service
 	if err = cursor.All(ctx, &services); err != nil {
@@ -173,7 +183,12 @@ func (r *ServiceRepository) GetLatestStatus(ctx context.Context) ([]*service.Ser
 	if err != nil {
 		return nil, errors.NewWithCause("failed to find latest status logs", errors.ErrorKindInternal, err)
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			// Log error but don't fail the operation
+			fmt.Printf("Error closing cursor: %v\n", err)
+		}
+	}()
 
 	var statusLogs []service.StatusLog
 	if err = cursor.All(ctx, &statusLogs); err != nil {
@@ -205,7 +220,12 @@ func (r *ServiceRepository) GetStatusHistory(ctx context.Context, serviceName st
 	if err != nil {
 		return nil, errors.NewWithCause("failed to find status logs for service", errors.ErrorKindInternal, err)
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			// Log error but don't fail the operation
+			fmt.Printf("Error closing cursor: %v\n", err)
+		}
+	}()
 
 	var statusLogs []*service.StatusLog
 	if err = cursor.All(ctx, &statusLogs); err != nil {

@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -44,9 +45,15 @@ func init() {
 	webCmd.Flags().StringVar(&staticDir, "static-dir", "./web/react-status-page/dist", "Static files directory")
 
 	// Bind flags to viper
-	viper.BindPFlag("web.port", webCmd.Flags().Lookup("port"))
-	viper.BindPFlag("web.api_url", webCmd.Flags().Lookup("api-url"))
-	viper.BindPFlag("web.static_dir", webCmd.Flags().Lookup("static-dir"))
+	if err := viper.BindPFlag("web.port", webCmd.Flags().Lookup("port")); err != nil {
+		log.Fatalf("Failed to bind web.port flag: %v", err)
+	}
+	if err := viper.BindPFlag("web.api_url", webCmd.Flags().Lookup("api-url")); err != nil {
+		log.Fatalf("Failed to bind web.api_url flag: %v", err)
+	}
+	if err := viper.BindPFlag("web.static_dir", webCmd.Flags().Lookup("static-dir")); err != nil {
+		log.Fatalf("Failed to bind web.static_dir flag: %v", err)
+	}
 }
 
 func runWeb(cmd *cobra.Command, args []string) {
@@ -79,8 +86,9 @@ func runWeb(cmd *cobra.Command, args []string) {
 
 	// Create server
 	server := &http.Server{
-		Addr:    ":" + webPort,
-		Handler: mux,
+		Addr:              ":" + webPort,
+		Handler:           mux,
+		ReadHeaderTimeout: 30 * time.Second, // Prevent Slowloris attacks
 	}
 
 	// Graceful shutdown

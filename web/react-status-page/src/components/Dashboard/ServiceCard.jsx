@@ -21,7 +21,7 @@ const ServiceCard = ({ service }) => {
     if (!timestamp) return 'N/A';
     try {
       return new Date(timestamp).toLocaleTimeString();
-    } catch (error) {
+    } catch {
       return 'Invalid date';
     }
   };

@@ -17,6 +17,9 @@ const (
 	WARN  Level = zapcore.WarnLevel
 	ERROR Level = zapcore.ErrorLevel
 	FATAL Level = zapcore.FatalLevel
+
+	// Common configuration values
+	timestampKey = "timestamp"
 )
 
 // Fields represents structured logging fields
@@ -43,7 +46,7 @@ type ZapLogger struct {
 func New(level Level) Logger {
 	config := zap.NewDevelopmentConfig()
 	config.Level = zap.NewAtomicLevelAt(level)
-	config.EncoderConfig.TimeKey = "timestamp"
+	config.EncoderConfig.TimeKey = timestampKey
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
 	config.DisableCaller = false
@@ -63,7 +66,7 @@ func New(level Level) Logger {
 // NewProduction creates a production-ready logger
 func NewProduction() Logger {
 	config := zap.NewProductionConfig()
-	config.EncoderConfig.TimeKey = "timestamp"
+	config.EncoderConfig.TimeKey = timestampKey
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
 	config.DisableCaller = false
@@ -83,7 +86,7 @@ func NewProduction() Logger {
 // NewDevelopment creates a development logger with human-readable output
 func NewDevelopment() Logger {
 	config := zap.NewDevelopmentConfig()
-	config.EncoderConfig.TimeKey = "timestamp"
+	config.EncoderConfig.TimeKey = timestampKey
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
 	config.DisableCaller = false

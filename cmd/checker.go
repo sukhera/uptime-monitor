@@ -46,9 +46,15 @@ func init() {
 	checkerCmd.Flags().StringVar(&checkerDBName, "db-name", "status_page", "MongoDB database name")
 
 	// Bind flags to viper
-	viper.BindPFlag("checker.interval", checkerCmd.Flags().Lookup("interval"))
-	viper.BindPFlag("database.url", checkerCmd.Flags().Lookup("db-url"))
-	viper.BindPFlag("database.name", checkerCmd.Flags().Lookup("db-name"))
+	if err := viper.BindPFlag("checker.interval", checkerCmd.Flags().Lookup("interval")); err != nil {
+		log.Fatalf("Failed to bind checker.interval flag: %v", err)
+	}
+	if err := viper.BindPFlag("database.url", checkerCmd.Flags().Lookup("db-url")); err != nil {
+		log.Fatalf("Failed to bind database.url flag: %v", err)
+	}
+	if err := viper.BindPFlag("database.name", checkerCmd.Flags().Lookup("db-name")); err != nil {
+		log.Fatalf("Failed to bind database.name flag: %v", err)
+	}
 }
 
 func runChecker(cmd *cobra.Command, args []string) {
@@ -63,7 +69,11 @@ func runChecker(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("Error closing database connection: %v", err)
+		}
+	}()
 
 	// Initialize checker service
 	service := checker.NewService(db)

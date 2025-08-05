@@ -58,7 +58,9 @@ func TestHTTPHealthCheckCommand_Execute_Success(t *testing.T) {
 	// Create test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
-		w.Write([]byte("OK"))
+		if _, err := w.Write([]byte("OK")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -88,7 +90,9 @@ func TestHTTPHealthCheckCommand_Execute_ExpectedStatusMismatch(t *testing.T) {
 	// Create test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(201) // Different from expected 200
-		w.Write([]byte("Created"))
+		if _, err := w.Write([]byte("Created")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -115,7 +119,9 @@ func TestHTTPHealthCheckCommand_Execute_ErrorStatus(t *testing.T) {
 	// Create test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
-		w.Write([]byte("Internal Server Error"))
+		if _, err := w.Write([]byte("Internal Server Error")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -163,7 +169,9 @@ func TestHTTPHealthCheckCommand_Execute_WithHeaders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedHeaders = r.Header
 		w.WriteHeader(200)
-		w.Write([]byte("OK"))
+		if _, err := w.Write([]byte("OK")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -217,12 +225,13 @@ func TestHealthCheckInvoker_ExecuteAll_Empty(t *testing.T) {
 	assert.Empty(t, results)
 }
 
-func TestHealthCheckInvoker_ExecuteAll_SingleCommand(t *testing.T) {
+func setupTestServer(t *testing.T) (*httptest.Server, *HealthCheckInvoker, HealthCheckCommand) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
-		w.Write([]byte("OK"))
+		if _, err := w.Write([]byte("OK")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
-	defer server.Close()
 
 	invoker := NewHealthCheckInvoker()
 	service := service.Service{
@@ -234,8 +243,14 @@ func TestHealthCheckInvoker_ExecuteAll_SingleCommand(t *testing.T) {
 	command := NewHTTPHealthCheckCommand(service, client)
 
 	invoker.AddCommand(command)
-	ctx := context.Background()
+	return server, invoker, command
+}
 
+func TestHealthCheckInvoker_ExecuteAll_SingleCommand(t *testing.T) {
+	server, invoker, _ := setupTestServer(t)
+	defer server.Close()
+
+	ctx := context.Background()
 	results := invoker.ExecuteAll(ctx)
 
 	assert.Len(t, results, 1)
@@ -247,13 +262,17 @@ func TestHealthCheckInvoker_ExecuteAll_MultipleCommands(t *testing.T) {
 	// Create multiple test servers
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
-		w.Write([]byte("OK"))
+		if _, err := w.Write([]byte("OK")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server1.Close()
 
 	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
-		w.Write([]byte("Error"))
+		if _, err := w.Write([]byte("Error")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server2.Close()
 
@@ -287,9 +306,10 @@ func TestHealthCheckInvoker_ExecuteAll_MultipleCommands(t *testing.T) {
 	// Find results by service name
 	var result1, result2 service.StatusLog
 	for _, result := range results {
-		if result.ServiceName == "service-1" {
+		switch result.ServiceName {
+		case "service-1":
 			result1 = result
-		} else if result.ServiceName == "service-2" {
+		case "service-2":
 			result2 = result
 		}
 	}
@@ -299,24 +319,10 @@ func TestHealthCheckInvoker_ExecuteAll_MultipleCommands(t *testing.T) {
 }
 
 func TestHealthCheckInvoker_ExecuteSequential(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Write([]byte("OK"))
-	}))
+	server, invoker, _ := setupTestServer(t)
 	defer server.Close()
 
-	invoker := NewHealthCheckInvoker()
-	service := service.Service{
-		Name:           "test-service",
-		URL:            server.URL,
-		ExpectedStatus: 200,
-	}
-	client := &http.Client{Timeout: 5 * time.Second}
-	command := NewHTTPHealthCheckCommand(service, client)
-
-	invoker.AddCommand(command)
 	ctx := context.Background()
-
 	results := invoker.ExecuteSequential(ctx)
 
 	assert.Len(t, results, 1)
@@ -347,7 +353,9 @@ func TestHealthCheckInvoker_ConcurrentExecution(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(50 * time.Millisecond) // Simulate network delay
 		w.WriteHeader(200)
-		w.Write([]byte("OK"))
+		if _, err := w.Write([]byte("OK")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -398,13 +406,17 @@ func TestHealthCheckInvoker_Integration(t *testing.T) {
 	// Test complete workflow with multiple services
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
-		w.Write([]byte("OK"))
+		if _, err := w.Write([]byte("OK")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server1.Close()
 
 	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(201)
-		w.Write([]byte("Created"))
+		if _, err := w.Write([]byte("Created")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server2.Close()
 
@@ -439,9 +451,10 @@ func TestHealthCheckInvoker_Integration(t *testing.T) {
 	operationalCount := 0
 	degradedCount := 0
 	for _, result := range results {
-		if result.Status == "operational" {
+		switch result.Status {
+		case "operational":
 			operationalCount++
-		} else if result.Status == "degraded" {
+		case "degraded":
 			degradedCount++
 		}
 	}

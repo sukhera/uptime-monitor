@@ -80,7 +80,12 @@ func (cmd *HTTPHealthCheckCommand) Execute(ctx context.Context) service.StatusLo
 		statusLog.Error = fmt.Sprintf("Request failed after %d attempts: %v", maxRetries, lastErr)
 		return statusLog
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			// Log error but don't fail the health check
+			fmt.Printf("Error closing response body: %v\n", err)
+		}
+	}()
 
 	statusLog.StatusCode = resp.StatusCode
 

@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Ensure proper type imports in mock files (e.g., `*service.Service`)
   - Clean up mock generation workflow in CI pipeline
   - Verify mocks are properly ignored by git (already in `.gitignore`)
+- **Fix security vulnerabilities**
+  - Update `github.com/go-viper/mapstructure/v2` from v2.2.1 to v2.3.0 to fix GO-2025-3787
+  - Address potential sensitive information leakage in logs when processing malformed data
 
 ## [0.4.0] - 2025-08-04
 

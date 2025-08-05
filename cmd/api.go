@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -47,9 +48,15 @@ func init() {
 	apiCmd.Flags().StringVar(&dbName, "db-name", "status_page", "MongoDB database name")
 
 	// Bind flags to viper
-	viper.BindPFlag("api.port", apiCmd.Flags().Lookup("port"))
-	viper.BindPFlag("database.url", apiCmd.Flags().Lookup("db-url"))
-	viper.BindPFlag("database.name", apiCmd.Flags().Lookup("db-name"))
+	if err := viper.BindPFlag("api.port", apiCmd.Flags().Lookup("port")); err != nil {
+		log.Fatalf("Failed to bind api.port flag: %v", err)
+	}
+	if err := viper.BindPFlag("database.url", apiCmd.Flags().Lookup("db-url")); err != nil {
+		log.Fatalf("Failed to bind database.url flag: %v", err)
+	}
+	if err := viper.BindPFlag("database.name", apiCmd.Flags().Lookup("db-name")); err != nil {
+		log.Fatalf("Failed to bind database.name flag: %v", err)
+	}
 }
 
 func runAPI(cmd *cobra.Command, args []string) {
@@ -58,7 +65,11 @@ func runAPI(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("Error closing database connection: %v", err)
+		}
+	}()
 
 	// Initialize handlers
 	statusHandler := handlers.NewStatusHandler(db)
@@ -73,11 +84,19 @@ func runAPI(cmd *cobra.Command, args []string) {
 	router.HandleFunc("/api/maintenance", statusHandler.GetMaintenance)
 	router.HandleFunc("/api/test", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"message": "test route works"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"message": "test route works"}); err != nil {
+			log.Printf("Error encoding test response: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 	})
 	router.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("Debug route works"))
+		if _, err := w.Write([]byte("Debug route works")); err != nil {
+			log.Printf("Error writing debug response: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Debug: Print registered routes
@@ -94,8 +113,9 @@ func runAPI(cmd *cobra.Command, args []string) {
 
 	// Create server
 	server := &http.Server{
-		Addr:    ":" + port,
-		Handler: handler,
+		Addr:              ":" + port,
+		Handler:           handler,
+		ReadHeaderTimeout: 30 * time.Second, // Prevent Slowloris attacks
 	}
 
 	// Graceful shutdown

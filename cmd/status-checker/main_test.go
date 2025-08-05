@@ -157,7 +157,9 @@ func TestMain_CommandLineFlags(t *testing.T) {
 			)
 
 			// Parse test arguments
-			flag.CommandLine.Parse(tt.args)
+			if err := flag.CommandLine.Parse(tt.args); err != nil {
+				t.Errorf("Failed to parse flags: %v", err)
+			}
 
 			assert.Equal(t, tt.expected["interval"], *intervalMinutes)
 			assert.Equal(t, tt.expected["mongo_uri"], *mongoURI)

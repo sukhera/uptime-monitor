@@ -259,7 +259,9 @@ func TestConfig_FromEnvironment(t *testing.T) {
 			}
 
 			for k, v := range tt.envVars {
-				os.Setenv(k, v)
+				if err := os.Setenv(k, v); err != nil {
+					t.Errorf("Failed to set environment variable %s: %v", k, err)
+				}
 			}
 
 			config := New(FromEnvironment())

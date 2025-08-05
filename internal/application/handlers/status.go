@@ -35,7 +35,11 @@ func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Expires", "0")
 
 		// Return empty array
-		json.NewEncoder(w).Encode([]service.ServiceStatus{})
+		if err := json.NewEncoder(w).Encode([]service.ServiceStatus{}); err != nil {
+			h.logError("failed to encode empty response", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 		return
 	}
 
@@ -50,7 +54,11 @@ func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			h.logError("failed to close cursor", err)
+		}
+	}()
 
 	var logs []bson.M
 	if err = cursor.All(ctx, &logs); err != nil {
@@ -114,6 +122,7 @@ func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(statuses); err != nil {
 		h.logError("failed to encode response", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
 	}
 }
 
@@ -127,11 +136,15 @@ func (h *StatusHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 			h.logError("database health check failed", err)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":    "unhealthy",
 				"error":     "database connection failed",
 				"timestamp": time.Now().UTC(),
-			})
+			}); err != nil {
+				h.logError("failed to encode health check response", err)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
 			return
 		}
 	}
@@ -156,7 +169,11 @@ func (h *StatusHandler) GetIncidents(w http.ResponseWriter, r *http.Request) {
 	// For now, return empty incidents array directly
 	response := []interface{}{}
 
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logError("failed to encode incidents response", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 // GetMaintenance returns maintenance schedule
@@ -166,19 +183,31 @@ func (h *StatusHandler) GetMaintenance(w http.ResponseWriter, r *http.Request) {
 	// For now, return empty maintenance array directly
 	response := []interface{}{}
 
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logError("failed to encode maintenance response", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 // GetTest returns a test response
 func (h *StatusHandler) GetTest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "test route works"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"message": "test route works"}); err != nil {
+		h.logError("failed to encode test response", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 // GetDebug returns debug information
 func (h *StatusHandler) GetDebug(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte("Debug route works"))
+	if _, err := w.Write([]byte("Debug route works")); err != nil {
+		h.logError("failed to write debug response", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 // logError provides structured error logging
