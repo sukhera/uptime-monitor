@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
 	"time"
 
 	"github.com/go-co-op/gocron"
 	"github.com/sukhera/uptime-monitor/internal/checker"
-	"github.com/sukhera/uptime-monitor/internal/config"
-	"github.com/sukhera/uptime-monitor/internal/database"
+	"github.com/sukhera/uptime-monitor/internal/container"
+	"github.com/sukhera/uptime-monitor/internal/shared/config"
+	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 )
 
 func main() {
@@ -21,48 +21,123 @@ func main() {
 	)
 	flag.Parse()
 
-	cfg := config.Load()
+	// Initialize structured logging
+	logLevel := logger.INFO
+	if *verbose {
+		logLevel = logger.DEBUG
+	}
+	logger.Init(logLevel)
+	log := logger.Get()
+
+	ctx := context.Background()
+
+	// Load configuration with functional options
+	cfg := config.New(config.FromEnvironment())
+
+	// Apply command-line overrides using functional options
+	var options []config.Option
 
 	if *intervalMinutes > 0 {
-		cfg.CheckInterval = time.Duration(*intervalMinutes) * time.Minute
+		options = append(options, config.WithCheckerInterval(time.Duration(*intervalMinutes)*time.Minute))
 	}
 	if *mongoURI != "" {
-		cfg.MongoURI = *mongoURI
+		options = append(options, config.WithDatabase(*mongoURI, cfg.Database.Name, cfg.Database.Timeout))
 	}
 	if *dbName != "" {
-		cfg.DBName = *dbName
+		options = append(options, config.WithDatabase(cfg.Database.URI, *dbName, cfg.Database.Timeout))
+	}
+
+	// Apply all options
+	if len(options) > 0 {
+		cfg = config.New(append([]config.Option{config.FromEnvironment()}, options...)...)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		log.Fatalf("[ERROR] Invalid configuration: %v", err)
+		log.Fatal(ctx, "Invalid configuration", err, logger.Fields{})
 	}
 
 	if *verbose {
-		log.Printf("[INFO] Configuration: interval=%v, db=%s", cfg.CheckInterval, cfg.DBName)
+		log.Info(ctx, "Configuration loaded", logger.Fields{
+			"interval": cfg.Checker.Interval.String(),
+			"db_name":  cfg.Database.Name,
+		})
 	}
-	log.Printf("[INFO] Starting status checker with %v interval", cfg.CheckInterval)
 
-	db, err := database.NewConnection(cfg.MongoURI, cfg.DBName)
+	// Initialize dependency injection container
+	container, err := container.New(cfg)
 	if err != nil {
-		log.Fatalf("[ERROR] Failed to connect to MongoDB: %v", err)
+		log.Fatal(ctx, "Failed to create container", err, logger.Fields{})
 	}
-	defer db.Close()
 
-	checkerService := checker.NewService(db)
+	// Get services from container
+	checkerService, err := container.GetCheckerService()
+	if err != nil {
+		log.Fatal(ctx, "Failed to get checker service", err, logger.Fields{})
+	}
+
+	// Setup observers for health check events
+	subject := checker.NewHealthCheckSubject()
+
+	// Add logging observer
+	loggingObserver := checker.NewLoggingObserver(log)
+	subject.Attach(loggingObserver)
+
+	// Add metrics observer
+	metricsObserver := checker.NewMetricsObserver()
+	subject.Attach(metricsObserver)
+
+	// Add alerting observer
+	alertingObserver := checker.NewAlertingObserver(5000) // 5 second threshold
+	subject.Attach(alertingObserver)
+
+	// Start alert processing goroutine
+	go processAlerts(ctx, alertingObserver.GetAlertChannel(), log)
+
+	log.Info(ctx, "Starting status checker", logger.Fields{
+		"interval": cfg.Checker.Interval.String(),
+	})
+
+	// Setup scheduler with enhanced health check function
 	scheduler := gocron.NewScheduler(time.UTC)
 
-	_, err = scheduler.Every(cfg.CheckInterval).Do(func() {
-		ctx := context.Background()
-		log.Println("[INFO] Running health checks...")
-
-		if err := checkerService.RunHealthChecks(ctx); err != nil {
-			log.Printf("[ERROR] Error running health checks: %v", err)
-		}
+	_, err = scheduler.Every(cfg.Checker.Interval).Do(func() {
+		runHealthChecks(ctx, checkerService, subject, log)
 	})
 	if err != nil {
-		log.Fatalf("[ERROR] Failed to schedule health checks: %v", err)
+		log.Fatal(ctx, "Failed to schedule health checks", err, logger.Fields{})
 	}
 
-	log.Println("[INFO] Status checker started successfully")
+	log.Info(ctx, "Status checker started successfully", logger.Fields{})
 	scheduler.StartBlocking()
+}
+
+// runHealthChecks runs health checks with enhanced logging and metrics
+func runHealthChecks(ctx context.Context, service checker.ServiceInterface, subject *checker.HealthCheckSubject, log logger.Logger) {
+	log.Info(ctx, "Running health checks", logger.Fields{})
+
+	if err := service.RunHealthChecks(ctx); err != nil {
+		log.Error(ctx, "Error running health checks", err, logger.Fields{})
+	}
+}
+
+// processAlerts processes alerts from the alerting observer
+func processAlerts(ctx context.Context, alertCh <-chan checker.HealthCheckEvent, log logger.Logger) {
+	for {
+		select {
+		case alert := <-alertCh:
+			log.Warn(ctx, "Service alert triggered", logger.Fields{
+				"service_name": alert.ServiceName,
+				"status":       alert.Status,
+				"latency_ms":   alert.Latency,
+				"status_code":  alert.StatusCode,
+				"error":        alert.Error,
+			})
+
+			// Here you could integrate with external alerting systems
+			// like PagerDuty, Slack, email, etc.
+
+		case <-ctx.Done():
+			return
+		}
+	}
 }

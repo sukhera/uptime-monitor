@@ -133,10 +133,14 @@ jobs:
         go test -v -race -coverprofile=coverage.out ./...
         go tool cover -func=coverage.out
 
+    - name: Install golangci-lint
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.3.1
+
     - name: Run Go linter
-      uses: golangci/golangci-lint-action@v4
-      with:
-        version: latest
+      run: |
+        export PATH=$PATH:$(go env GOPATH)/bin
+        golangci-lint run --timeout=5m
 
     - name: Build frontend
       run: |

@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
-	"github.com/sukhera/uptime-monitor/internal/database"
-	"github.com/sukhera/uptime-monitor/internal/models"
+	"github.com/sukhera/uptime-monitor/internal/domain/service"
+	mongodb "github.com/sukhera/uptime-monitor/internal/infrastructure/database/mongo"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -19,134 +18,153 @@ const (
 	statusDegraded    = "degraded"
 )
 
+// HTTPClient interface for mocking HTTP requests
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// ServiceInterface defines the interface for the health checker service
+type ServiceInterface interface {
+	RunHealthChecks(ctx context.Context) error
+}
+
 type Service struct {
-	db     database.Interface
-	client *http.Client
+	db     mongodb.Interface
+	client HTTPClient
 }
 
-func NewService(db database.Interface) *Service {
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-	return &Service{
-		db:     db,
-		client: client,
+// ServiceOption is a function that configures a Service
+type ServiceOption func(*Service)
+
+// WithHTTPClient sets a custom HTTP client
+func WithHTTPClient(client HTTPClient) ServiceOption {
+	return func(s *Service) {
+		s.client = client
 	}
 }
 
+// WithTimeout sets the HTTP client timeout
+func WithTimeout(timeout time.Duration) ServiceOption {
+	return func(s *Service) {
+		if s.client == nil {
+			s.client = &http.Client{Timeout: timeout}
+		} else {
+			if httpClient, ok := s.client.(*http.Client); ok {
+				httpClient.Timeout = timeout
+			}
+		}
+	}
+}
+
+// NewService creates a new Service with the given options
+func NewService(db mongodb.Interface, options ...ServiceOption) *Service {
+	service := &Service{
+		db: db,
+		client: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+	}
+
+	for _, option := range options {
+		option(service)
+	}
+
+	return service
+}
+
+// NewServiceWithClient creates a service with a custom HTTP client (useful for testing)
+// Deprecated: Use NewService with WithHTTPClient option instead
+func NewServiceWithClient(db mongodb.Interface, client HTTPClient) *Service {
+	return NewService(db, WithHTTPClient(client))
+}
+
+// RunHealthChecks runs health checks using the command pattern
 func (s *Service) RunHealthChecks(ctx context.Context) error {
 	cursor, err := s.db.ServicesCollection().Find(ctx, bson.M{"enabled": true})
 	if err != nil {
 		return fmt.Errorf("error querying services: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("[ERROR] Failed to close cursor: %v", err)
+		}
+	}()
 
-	var services []models.Service
+	var services []service.Service
 	if err = cursor.All(ctx, &services); err != nil {
 		return fmt.Errorf("error decoding services: %w", err)
 	}
 
-	log.Printf("[INFO] Checking %d services", len(services))
+	// Create command invoker
+	invoker := NewHealthCheckInvoker()
 
-	var wg sync.WaitGroup
-	statusLogs := make(chan models.StatusLog, len(services))
-
+	// Create commands for each service
 	for _, service := range services {
-		wg.Add(1)
-		go s.checkURL(service, &wg, statusLogs)
+		command := NewHTTPHealthCheckCommand(service, s.client)
+		invoker.AddCommand(command)
 	}
 
-	go func() {
-		wg.Wait()
-		close(statusLogs)
-	}()
+	// Execute all health check commands concurrently
+	statusLogs := invoker.ExecuteAll(ctx)
 
-	for statusLog := range statusLogs {
+	// Store results in database
+	for _, statusLog := range statusLogs {
 		if _, err := s.db.StatusLogsCollection().InsertOne(ctx, statusLog); err != nil {
+			// Log error but continue with other results
 			log.Printf("[ERROR] Failed to insert status log for %s: %v", statusLog.ServiceName, err)
 		}
 	}
 
-	log.Printf("[INFO] Health checks completed for %d services", len(services))
 	return nil
 }
 
-func (s *Service) checkURL(service models.Service, wg *sync.WaitGroup, statusLogs chan<- models.StatusLog) {
-	defer wg.Done()
-
-	statusLog := s.checkService(service)
-	log.Printf("[INFO] %s: %s (status: %d, latency: %dms)",
-		service.Name, statusLog.Status, statusLog.StatusCode, statusLog.Latency)
-
-	statusLogs <- statusLog
-}
-
-func (s *Service) checkService(service models.Service) models.StatusLog {
-	const maxRetries = 3
-	const retryDelay = 500 * time.Millisecond
-
-	req, err := http.NewRequest("GET", service.URL, nil)
+// RunHealthChecksWithObservers runs health checks and notifies observers
+func (s *Service) RunHealthChecksWithObservers(ctx context.Context, subject *HealthCheckSubject) error {
+	cursor, err := s.db.ServicesCollection().Find(ctx, bson.M{"enabled": true})
 	if err != nil {
-		log.Printf("[ERROR] Failed to create request for %s: %v", service.Name, err)
-		return models.StatusLog{
-			ServiceName: service.Name,
-			Status:      "down",
-			Latency:     0,
-			StatusCode:  0,
-			Error:       fmt.Sprintf("Failed to create request: %v", err),
-			Timestamp:   time.Now(),
+		return fmt.Errorf("error querying services: %w", err)
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("[ERROR] Failed to close cursor: %v", err)
 		}
+	}()
+
+	var services []service.Service
+	if err = cursor.All(ctx, &services); err != nil {
+		return fmt.Errorf("error decoding services: %w", err)
 	}
 
-	for k, v := range service.Headers {
-		req.Header.Set(k, v)
+	// Create command invoker
+	invoker := NewHealthCheckInvoker()
+
+	// Create commands for each service
+	for _, service := range services {
+		command := NewHTTPHealthCheckCommand(service, s.client)
+		invoker.AddCommand(command)
 	}
 
-	var resp *http.Response
-	var latency int64
-	var lastErr error
+	// Execute all health check commands concurrently
+	statusLogs := invoker.ExecuteAll(ctx)
 
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		start := time.Now()
-		resp, err = s.client.Do(req)
-		latency = time.Since(start).Milliseconds()
-
-		if err == nil {
-			break
+	// Store results and notify observers
+	for _, statusLog := range statusLogs {
+		// Store in database
+		if _, err := s.db.StatusLogsCollection().InsertOne(ctx, statusLog); err != nil {
+			log.Printf("[ERROR] Failed to insert status log for %s: %v", statusLog.ServiceName, err)
 		}
 
-		lastErr = err
-		if attempt < maxRetries {
-			log.Printf("[WARN] Attempt %d failed for %s, retrying in %v: %v",
-				attempt, service.Name, retryDelay, err)
-			time.Sleep(retryDelay)
+		// Notify observers
+		event := HealthCheckEvent{
+			ServiceName: statusLog.ServiceName,
+			Status:      statusLog.Status,
+			Latency:     statusLog.Latency,
+			StatusCode:  statusLog.StatusCode,
+			Error:       statusLog.Error,
+			Timestamp:   statusLog.Timestamp.Unix(),
 		}
+		subject.Notify(ctx, event)
 	}
 
-	statusLog := models.StatusLog{
-		ServiceName: service.Name,
-		Latency:     latency,
-		Timestamp:   time.Now(),
-	}
-
-	if lastErr != nil && resp == nil {
-		statusLog.Status = statusDown
-		statusLog.Error = fmt.Sprintf("Request failed after %d attempts: %v", maxRetries, lastErr)
-		log.Printf("[ERROR] Request failed for %s after %d attempts: %v", service.Name, maxRetries, lastErr)
-		return statusLog
-	}
-	defer resp.Body.Close()
-
-	statusLog.StatusCode = resp.StatusCode
-
-	if resp.StatusCode == service.ExpectedStatus {
-		statusLog.Status = statusOperational
-	} else if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		statusLog.Status = statusDegraded
-	} else {
-		statusLog.Status = statusDown
-		statusLog.Error = fmt.Sprintf("Unexpected status code: %d", resp.StatusCode)
-	}
-
-	return statusLog
+	return nil
 }

@@ -8,25 +8,25 @@ db.createCollection('status_logs');
 // Insert sample services
 db.services.insertMany([
   {
-    name: "Auth API",
-    slug: "auth-api",
-    url: "https://httpstat.us/200",
+    name: "API Server",
+    slug: "api-server",
+    url: "http://api:8080/api/health",
     headers: {},
     expected_status: 200,
     enabled: true
   },
   {
-    name: "Website",
-    slug: "website", 
-    url: "https://httpstat.us/500",
+    name: "Web Dashboard",
+    slug: "web-dashboard",
+    url: "http://web/",
     headers: {},
     expected_status: 200,
     enabled: true
   },
   {
-    name: "Database",
-    slug: "database",
-    url: "https://httpstat.us/200",
+    name: "MongoDB",
+    slug: "mongodb",
+    url: "http://mongo:27017",
     headers: {},
     expected_status: 200,
     enabled: true

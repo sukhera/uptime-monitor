@@ -5,8 +5,6 @@ services:
     image: mongo:6
     container_name: status-mongo
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-changeme}
       MONGO_INITDB_DATABASE: status_page
     volumes:
       - mongo_data:/data/db
@@ -47,6 +45,8 @@ services:
       context: .
       dockerfile: configs/docker/Dockerfile.api
     container_name: status-api
+    ports:
+      - "8080:8080"
     depends_on:
       mongo:
         condition: service_healthy
@@ -76,8 +76,7 @@ services:
     ports:
       - "80:80"
     depends_on:
-      api:
-        condition: service_healthy
+      - api
     networks:
       - status-network
     restart: unless-stopped

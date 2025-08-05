@@ -117,58 +117,52 @@ dev-checker: ## Run status checker locally
 	@echo "$(YELLOW)Starting status checker locally...$(NC)"
 	@export MONGO_URI=mongodb://localhost:27017/status_page && go run ./cmd/status-checker
 
-##@ Testing
+##@ Testing & Quality
 test: ## Run all tests
 	@echo "$(YELLOW)Running all tests...$(NC)"
 	@make test-go
 	@make test-frontend
-	@make test-integration
 	@echo "$(GREEN)✓ All tests completed!$(NC)"
 
 test-go: ## Run Go tests
 	@echo "$(BLUE)Running Go tests...$(NC)"
 	@go test -v -race -coverprofile=coverage.out ./...
-	@go tool cover -html=coverage.out -o coverage.html
-	@go tool cover -func=coverage.out | tail -1
-	@echo "$(GREEN)✓ Go tests completed! Coverage report: coverage.html$(NC)"
-
-test-unit: ## Run unit tests only (short mode)
-	@echo "$(BLUE)Running unit tests only...$(NC)"
-	@go test -short -v ./...
-
-test-coverage: ## Run tests with detailed coverage
-	@echo "$(BLUE)Running tests with detailed coverage...$(NC)"
-	@go test -coverprofile=coverage.out -covermode=atomic -v ./...
 	@go tool cover -func=coverage.out
 	@go tool cover -html=coverage.out -o coverage.html
-	@echo "$(GREEN)✓ Coverage report generated: coverage.html$(NC)"
-
-test-package: ## Run tests for specific package (usage: make test-package PKG=./internal/config)
-	@if [ -z "$(PKG)" ]; then echo "$(RED)Usage: make test-package PKG=./internal/config$(NC)"; exit 1; fi
-	@echo "$(BLUE)Running tests for $(PKG)...$(NC)"
-	@go test -v $(PKG)
-
-generate-mocks: ## Generate mock files using mockery
-	@echo "$(BLUE)Generating mocks...$(NC)"
-	@mockery
-	@echo "$(GREEN)✓ Mocks generated!$(NC)"
 
 test-frontend: ## Run frontend tests
 	@echo "$(BLUE)Running frontend tests...$(NC)"
 	@if [ -f web/react-status-page/package.json ]; then \
-		cd web/react-status-page && npm test -- --coverage --watchAll=false; \
+		cd web/react-status-page && npm test; \
 	else \
 		echo "$(YELLOW)No package.json found - skipping frontend tests$(NC)"; \
 	fi
 
 test-integration: ## Run integration tests
 	@echo "$(BLUE)Running integration tests...$(NC)"
-	@$(DOCKER_COMPOSE_TEST) up --build --abort-on-container-exit
-	@$(DOCKER_COMPOSE_TEST) down
+	@make db-start
+	@go test -v -tags=integration ./...
+	@make db-stop
 
 test-e2e: ## Run end-to-end tests
-	@echo "$(BLUE)Running E2E tests...$(NC)"
-	@cd web && npm run test:e2e
+	@echo "$(BLUE)Running end-to-end tests...$(NC)"
+	@make dev
+	@go test -v -tags=e2e ./tests/e2e/...
+	@make clean
+
+generate-mocks: ## Generate mocks using Mockery
+	@echo "$(BLUE)Generating mocks...$(NC)"
+	@go install github.com/vektra/mockery/v2@latest
+	@mockery
+	@echo "$(GREEN)✓ Mocks generated!$(NC)"
+
+test-with-mocks: ## Run tests with generated mocks
+	@echo "$(BLUE)Running tests with mocks...$(NC)"
+	@make generate-mocks
+	@go test -v ./internal/application/handlers/...
+	@go test -v ./internal/checker/...
+	@echo "$(GREEN)✓ Tests with mocks completed!$(NC)"
+
 
 ##@ Code Quality
 lint: ## Run all linters
@@ -258,7 +252,6 @@ deploy-prod: ## Deploy to production
 
 deploy-staging: ## Deploy to staging
 	@echo "$(YELLOW)Deploying to staging...$(NC)"
-	@make build
 	@$(DOCKER_COMPOSE) -f docker-compose.staging.yml up -d
 	@make wait-for-services
 	@echo "$(GREEN)✓ Staging deployment completed!$(NC)"
@@ -388,3 +381,11 @@ ci-build: ## CI build pipeline
 ci-deploy: ## CI deploy pipeline
 	@make ci-build
 	@make deploy-staging
+
+# mocks: mocks-clean mocks-generate
+# 
+# mocks-generate:
+# 	go generate ./... && mockery --all --inpackage --with-expecter=true
+# 
+# mocks-clean:
+# 	find . -name "mock_*.go" -type f -delete
