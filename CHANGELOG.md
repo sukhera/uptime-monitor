@@ -35,9 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Resolve data race conditions in concurrent test scenarios
   - Ensure all tests pass with race detection enabled
 - **Fix CI pipeline golangci-lint version mismatch**
-  - Update GitHub Actions to use golangci-lint v2.3.1 explicitly
-  - Resolve configuration file compatibility issues
-  - Fix CI pipeline linting failures
+  - Replace GitHub Action with manual golangci-lint installation
+  - Install golangci-lint v2.3.1 directly to ensure v2 configuration compatibility
+  - Fix CI pipeline linting failures by bypassing action version limitations
 - **Fix CI pipeline test timeout issues**
   - Add `-short` flag to CI test runs to skip problematic tests
   - Skip MongoDB connection tests that can hang in CI environment
