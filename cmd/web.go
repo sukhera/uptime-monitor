@@ -75,88 +75,47 @@ func runWeb(cmd *cobra.Command, args []string) {
 
 	// Serve static files with enhanced security
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Get the requested path and normalize it
+		// Get the requested path
 		requestedPath := r.URL.Path
 
-		// Normalize the path to prevent path traversal attacks
-		// Remove any ".." sequences and normalize separators
-		cleanPath := filepath.Clean(requestedPath)
-
-		// Additional security: ensure the path doesn't contain ".." after cleaning
-		if strings.Contains(cleanPath, "..") {
-			http.Error(w, "Invalid path", http.StatusBadRequest)
-			return
+		// Security: Use a strict allowlist approach to completely avoid user-controlled data in path construction
+		allowedFiles := map[string]string{
+			"/":            "index.html",
+			"/index.html":  "index.html",
+			"/favicon.ico": "favicon.ico",
 		}
 
-		// Ensure the path starts with "/"
-		if !strings.HasPrefix(cleanPath, "/") {
-			cleanPath = "/" + cleanPath
+		// Look up the file in the allowlist
+		safeFile, ok := allowedFiles[requestedPath]
+		if !ok {
+			// For any other path, serve index.html for SPA routing
+			safeFile = "index.html"
 		}
 
-		// Remove leading slash for file system operations
-		relativePath := strings.TrimPrefix(cleanPath, "/")
+		filePath := filepath.Join(staticDir, safeFile)
 
-		// Security: Only allow specific file patterns and extensions
-		allowedExtensions := []string{".html", ".css", ".js", ".json", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot"}
-		allowedPrefixes := []string{"assets/", "static/", ""}
-
-		// Check if the path has an allowed extension or prefix
-		isAllowed := false
-
-		// Check for allowed extensions
-		for _, ext := range allowedExtensions {
-			if strings.HasSuffix(relativePath, ext) {
-				isAllowed = true
-				break
-			}
-		}
-
-		// Check for allowed prefixes (for directories)
-		if !isAllowed {
-			for _, prefix := range allowedPrefixes {
-				if relativePath == prefix || strings.HasPrefix(relativePath, prefix) {
-					isAllowed = true
-					break
-				}
-			}
-		}
-
-		// If not allowed, serve index.html for SPA routing
-		if !isAllowed {
-			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
-			return
-		}
-
-		// Construct the file path using only validated components
-		filePath := filepath.Join(staticDir, relativePath)
-
-		// Security: Ensure the resolved path is within the static directory
+		// Security: Ensure the resolved path is within the static directory using filepath.Rel
 		absStaticDir, err := filepath.Abs(staticDir)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-
 		absFilePath, err := filepath.Abs(filePath)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-
-		// Ensure the file path is within the static directory
-		if !strings.HasPrefix(absFilePath, absStaticDir) {
+		relPath, err := filepath.Rel(absStaticDir, absFilePath)
+		if err != nil || strings.HasPrefix(relPath, "..") || strings.Contains(relPath, string(os.PathSeparator)+"..") {
 			http.Error(w, "Invalid path", http.StatusBadRequest)
 			return
 		}
 
 		// Check if the file exists
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			// File doesn't exist, serve index.html for SPA routing
 			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
 			return
 		}
-
-		// Serve the file using the file server
 		fs.ServeHTTP(w, r)
 	}))
 
