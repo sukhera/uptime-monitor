@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fix security vulnerabilities**
   - Update `github.com/go-viper/mapstructure/v2` from v2.2.1 to v2.3.0 to fix GO-2025-3787
   - Address potential sensitive information leakage in logs when processing malformed data
+- **Fix test race conditions**
+  - Add thread-safe synchronization to MockObserver in observer tests
+  - Resolve data race conditions in concurrent test scenarios
+  - Ensure all tests pass with race detection enabled
 
 ## [0.4.0] - 2025-08-04
 

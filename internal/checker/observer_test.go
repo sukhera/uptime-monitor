@@ -11,13 +11,30 @@ import (
 
 // MockObserver is a mock observer for testing
 type MockObserver struct {
+	mu       sync.RWMutex
 	notified bool
 	events   []HealthCheckEvent
 }
 
 func (m *MockObserver) OnHealthCheckCompleted(ctx context.Context, event HealthCheckEvent) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.notified = true
 	m.events = append(m.events, event)
+}
+
+// IsNotified returns whether the observer has been notified (thread-safe)
+func (m *MockObserver) IsNotified() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.notified
+}
+
+// GetEvents returns the events received by the observer (thread-safe)
+func (m *MockObserver) GetEvents() []HealthCheckEvent {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return append([]HealthCheckEvent{}, m.events...)
 }
 
 func TestHealthCheckSubject_New(t *testing.T) {
@@ -100,9 +117,10 @@ func TestHealthCheckSubject_Notify(t *testing.T) {
 	// Wait a bit for goroutine to complete
 	time.Sleep(10 * time.Millisecond)
 
-	assert.True(t, observer.notified)
-	assert.Len(t, observer.events, 1)
-	assert.Equal(t, event, observer.events[0])
+	assert.True(t, observer.IsNotified())
+	events := observer.GetEvents()
+	assert.Len(t, events, 1)
+	assert.Equal(t, event, events[0])
 }
 
 func TestHealthCheckSubject_Notify_MultipleObservers(t *testing.T) {
@@ -128,12 +146,14 @@ func TestHealthCheckSubject_Notify_MultipleObservers(t *testing.T) {
 	// Wait a bit for goroutines to complete
 	time.Sleep(10 * time.Millisecond)
 
-	assert.True(t, observer1.notified)
-	assert.True(t, observer2.notified)
-	assert.Len(t, observer1.events, 1)
-	assert.Len(t, observer2.events, 1)
-	assert.Equal(t, event, observer1.events[0])
-	assert.Equal(t, event, observer2.events[0])
+	assert.True(t, observer1.IsNotified())
+	assert.True(t, observer2.IsNotified())
+	events1 := observer1.GetEvents()
+	events2 := observer2.GetEvents()
+	assert.Len(t, events1, 1)
+	assert.Len(t, events2, 1)
+	assert.Equal(t, event, events1[0])
+	assert.Equal(t, event, events2[0])
 }
 
 func TestHealthCheckSubject_Notify_NoObservers(t *testing.T) {
@@ -479,7 +499,8 @@ func TestObserver_ConcurrentNotifications(t *testing.T) {
 
 	// Should have received most notifications (with tolerance for race conditions)
 	// In concurrent environments, some events might be lost due to timing
-	assert.True(t, len(observer.events) >= 5, "Expected at least 5 events, got %d", len(observer.events))
+	events := observer.GetEvents()
+	assert.True(t, len(events) >= 5, "Expected at least 5 events, got %d", len(events))
 }
 
 func TestObserver_ContextCancellation(t *testing.T) {
