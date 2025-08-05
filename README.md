@@ -13,6 +13,10 @@ A comprehensive uptime monitoring solution with real-time service monitoring, bu
 - 🛠️ **Complete Infrastructure Automation** with 50+ Makefile commands
 - 🧪 **Comprehensive Testing** with automated CI/CD pipeline
 - 📈 **Monitoring & Alerting** with performance metrics and health checks
+- 🏗️ **Advanced Design Patterns** with functional options, DI container, and observer pattern
+- 📝 **Structured Logging** with context-aware logging and metrics collection
+- 🔄 **Command Pattern** for modular health check operations
+- 👁️ **Observer Pattern** for decoupled event handling
 
 ## 🚀 Quick Start
 
@@ -36,11 +40,85 @@ make dev      # Start development environment
 - **API Health**: http://localhost/api/health
 - **MongoDB**: mongodb://localhost:27017
 
+## 🏗️ Architecture & Design Patterns
+
+### Advanced Design Patterns Implementation
+
+This project implements several key design patterns to improve maintainability, testability, and extensibility:
+
+#### 1. **Functional Options Pattern** ✅
+```go
+// Flexible configuration with options
+cfg := config.New(
+    config.WithServerPort("9090"),
+    config.WithDatabase("mongodb://custom:27017", "custom_db", 15*time.Second),
+    config.WithLogging("debug", true),
+    config.WithCheckerInterval(5*time.Minute),
+)
+```
+
+#### 2. **Dependency Injection Container** ✅
+```go
+// Centralized dependency management
+container := container.New(cfg)
+checkerService, err := container.GetCheckerService()
+```
+
+#### 3. **Structured Logging with Context** ✅
+```go
+// Context-aware structured logging
+log.Info(ctx, "Health check completed", logger.Fields{
+    "service_name": "api",
+    "status":       "operational",
+    "latency_ms":   150,
+})
+```
+
+#### 4. **Command Pattern** ✅
+```go
+// Modular health check commands
+invoker := NewHealthCheckInvoker()
+command := NewHTTPHealthCheckCommand(service, client)
+invoker.AddCommand(command)
+statusLogs := invoker.ExecuteAll(ctx)
+```
+
+#### 5. **Observer Pattern** ✅
+```go
+// Decoupled event handling
+subject := NewHealthCheckSubject()
+subject.Attach(NewLoggingObserver(logger))
+subject.Attach(NewMetricsObserver())
+subject.Attach(NewAlertingObserver(5000))
+subject.Notify(ctx, event)
+```
+
+### Architecture Flow
+
+```
+Configuration (Functional Options)
+    ↓
+DI Container (Dependency Injection)
+    ↓
+Services (Command Pattern)
+    ↓
+Observers (Observer Pattern)
+    ↓
+Structured Logging + Metrics
+```
+
+### Benefits Achieved
+
+- **Maintainability**: Clear separation of concerns with modular components
+- **Testability**: Dependency injection enables easy mocking and isolated testing
+- **Extensibility**: Easy to add new health check types and event handlers
+- **Observability**: Structured logging with context and comprehensive metrics
+- **Performance**: Concurrent health check execution with asynchronous event processing
 
 ### 🔧 Tech Stack
 
 #### Backend
-- **Go 1.24+**: High-performance backend services
+- **Go 1.24+**: High-performance backend services with design patterns
 - **MongoDB**: Document-based data storage
 - **Docker**: Containerized deployment
 - **Nginx**: Reverse proxy and static serving
@@ -172,6 +250,28 @@ make ci-deploy      # CI deploy pipeline
 
 ## 🔧 Configuration
 
+### Advanced Configuration with Functional Options
+
+The project uses functional options pattern for flexible configuration:
+
+```go
+// Environment-based configuration
+cfg := config.New(config.FromEnvironment())
+
+// Custom configuration with options
+cfg := config.New(
+    config.WithServerPort("9090"),
+    config.WithDatabase("mongodb://custom:27017", "custom_db", 15*time.Second),
+    config.WithLogging("debug", true),
+    config.WithCheckerInterval(5*time.Minute),
+)
+
+// Validate configuration
+if err := cfg.Validate(); err != nil {
+    log.Fatal(ctx, "Invalid configuration", err, logger.Fields{})
+}
+```
+
 ### Adding Services
 Services are stored in MongoDB. You can add them via the seed script or directly:
 
@@ -209,13 +309,22 @@ Key configuration areas:
 status_page_starter/
 ├── cmd/                        # Application entry points
 │   ├── api/                   # API server main
-│   └── status-checker/        # Status checker main
+│   └── status-checker/        # Status checker main (with design patterns)
 ├── internal/                  # Private application code
 │   ├── api/                  # API handlers, middleware, routes
-│   ├── checker/              # Health checking logic
+│   ├── checker/              # Health checking logic (Command + Observer patterns)
+│   │   ├── commands.go       # Command pattern implementation
+│   │   ├── observer.go       # Observer pattern implementation
+│   │   └── service.go        # Enhanced service with patterns
+│   ├── container/            # Dependency injection container
+│   │   └── container.go      # DI container implementation
 │   ├── database/             # Database connections
+│   ├── logger/               # Structured logging with context
+│   │   └── logger.go         # Logger implementation
 │   ├── models/               # Data models
-│   └── config/               # Configuration management
+│   └── config/               # Configuration management (Functional options)
+│       ├── config.go         # Functional options implementation
+│       └── config_test.go    # Comprehensive tests
 ├── configs/                  # Configuration files
 │   ├── docker/              # Docker configurations
 │   │   ├── Dockerfile.api.dev        # Development API Dockerfile
@@ -273,6 +382,10 @@ status_page_starter/
 │   └── seed-db.sh          # Database seeding
 ├── data/                    # Data and seed files
 ├── docs/                    # API and architecture documentation
+│   ├── functional-options-pattern.md  # Functional options documentation
+│   └── design-patterns.md   # Design patterns guide
+├── examples/                # Example implementations
+│   └── functional-options-demo.go  # Design patterns demo
 ├── tests/                   # Test files
 ├── deployments/             # Deployment configurations (K8s, Helm)
 ├── backups/                 # Database backups
@@ -288,7 +401,6 @@ status_page_starter/
 ├── go.mod                  # Go module definition
 └── README.md              # This comprehensive guide
 ```
-
 
 ## 🛠️ Development
 
@@ -334,6 +446,21 @@ make lint           # Run all linters (Go, TypeScript, CSS, Shell, YAML)
 make format         # Auto-format all code
 make test           # Run comprehensive test suite
 make security       # Security scanning and vulnerability checks
+```
+
+### Design Patterns Testing
+
+The project includes comprehensive tests for all design patterns:
+
+```bash
+# Test functional options pattern
+go test ./internal/config/... -v
+
+# Test command pattern
+go test ./internal/checker/... -v
+
+# Test observer pattern
+go test ./internal/logger/... -v
 ```
 
 ### Database Schema
@@ -392,6 +519,27 @@ make logs-web       # Web server logs only
 - **Log Aggregation**: Daily log collection and analysis
 - **Historical Trending**: Performance trend analysis over time
 - **Alert Integration**: Webhook notifications for critical issues
+
+### Structured Logging with Context
+
+The project implements structured logging with context for better observability:
+
+```go
+// Context-aware logging
+log.Info(ctx, "Health check completed", logger.Fields{
+    "service_name": "api",
+    "status":       "operational",
+    "latency_ms":   150,
+    "status_code":  200,
+})
+
+// Error logging with context
+log.Error(ctx, "Health check failed", err, logger.Fields{
+    "service_name": "api",
+    "attempt":      3,
+    "timeout":      "10s",
+})
+```
 
 ### Database Management
 
@@ -497,7 +645,6 @@ make deploy-prod     # Automated rolling update with health checks
 - **Security Scanning**: Container vulnerability assessment
 - **Multi-Architecture**: ARM64 and AMD64 support ready
 
-
 ## 🤝 Contributing
 
 ### Development Workflow
@@ -515,6 +662,47 @@ make deploy-prod     # Automated rolling update with health checks
 - **JavaScript**: ES6+ with modern patterns, avoid jQuery
 - **CSS**: Use custom properties, mobile-first approach
 - **HTML**: Semantic HTML5 with proper accessibility
+
+### Design Patterns Best Practices
+
+When contributing, follow these design pattern best practices:
+
+#### Functional Options Pattern
+```go
+// Good: Clear, composable configuration
+cfg := config.New(
+    config.WithServerPort("8080"),
+    config.WithDatabase("mongodb://localhost:27017", "app", 10*time.Second),
+)
+
+// Avoid: Hard-coded configuration
+cfg := &Config{
+    Server: ServerConfig{Port: "8080"},
+    Database: DatabaseConfig{URI: "mongodb://localhost:27017"},
+}
+```
+
+#### Dependency Injection
+```go
+// Good: Use DI container for service management
+container := container.New(cfg)
+service, err := container.GetCheckerService()
+
+// Avoid: Direct instantiation
+service := checker.NewService(db)
+```
+
+#### Structured Logging
+```go
+// Good: Context-aware structured logging
+log.Info(ctx, "Operation completed", logger.Fields{
+    "service": "api",
+    "duration_ms": 150,
+})
+
+// Avoid: Basic logging
+log.Printf("Operation completed")
+```
 
 ### Comprehensive Testing Automation
 
@@ -550,6 +738,21 @@ All quality checks run automatically before commits via Git hooks:
 - Frontend linting and formatting
 - Security scanning
 - Code formatting validation
+
+## 📚 Documentation
+
+### Design Patterns Documentation
+
+- **Functional Options Pattern**: `docs/functional-options-pattern.md`
+- **Design Patterns Guide**: `docs/design-patterns.md`
+- **Architecture Overview**: `docs/architecture.md`
+- **Best Practices**: `docs/best-practices.md`
+
+### API Documentation
+
+- **API Reference**: `docs/api.md`
+- **Configuration Guide**: `docs/configuration.md`
+- **Deployment Guide**: `docs/deployment.md`
 
 ## 📄 License
 

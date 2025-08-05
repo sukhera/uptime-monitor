@@ -1,9 +1,50 @@
 with-expecter: true
 packages:
-  github.com/sukhera/uptime-monitor/internal/database:
+  github.com/sukhera/uptime-monitor/internal/infrastructure/database:
     config:
-      dir: "mocks"
+      inpackage: false
       mockname: "MockDatabaseInterface"
       filename: "MockDatabaseInterface.go"
+      outpkg: "database"
     interfaces:
       Interface:
+  
+  github.com/sukhera/uptime-monitor/internal/infrastructure/database/mongo:
+    config:
+      inpackage: false
+      mockname: "MockInterface"
+      filename: "MockInterface.go"
+      outpkg: "mongo"
+    interfaces:
+      Interface:
+  
+  github.com/sukhera/uptime-monitor/internal/domain/service:
+    config:
+      inpackage: false
+      mockname: "MockRepository"
+      filename: "MockRepository.go"
+      outpkg: "service"
+    interfaces:
+      Repository:
+  
+  github.com/sukhera/uptime-monitor/internal/checker:
+    config:
+      inpackage: false
+      outpkg: "checker"
+    interfaces:
+      HTTPClient:
+      ServiceInterface:
+      HealthCheckCommand:
+      HealthCheckObserver:
+      ServiceOption:
+  
+  github.com/sukhera/uptime-monitor/internal/server:
+    config:
+      inpackage: false
+      mockname: "MockServer"
+      filename: "MockServer.go"
+      outpkg: "server"
+    interfaces:
+      Interface:
+      Router:
+      Middleware:

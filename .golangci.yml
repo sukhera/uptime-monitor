@@ -1,4 +1,6 @@
 # Golangci-lint configuration - Focused on functional issues
+version: "2"
+
 run:
   timeout: 5m
   modules-download-mode: readonly
@@ -7,11 +9,9 @@ linters:
   enable:
     # Essential functional linters
     - errcheck          # Check for unchecked errors
-    - gosimple         # Suggest code simplifications
     - govet            # Go vet analysis
     - ineffassign      # Detect ineffectual assignments
     - staticcheck      # Static analysis
-    - typecheck        # Parse and type-check Go code
     - unused           # Check for unused constants, variables, functions and types
     
     # Security and best practices
@@ -27,45 +27,3 @@ linters:
     # Code quality (reasonable settings)
     - goconst          # Repeated strings that could be constants
     - dupl             # Code duplication (with higher threshold)
-    - gofmt            # Code formatting
-    - goimports        # Import formatting
-
-linters-settings:
-  goconst:
-    min-len: 3           # Minimum length of string constant
-    min-occurrences: 3   # Minimum occurrences to require constant
-  
-  dupl:
-    threshold: 100       # Higher threshold to avoid minor duplication complaints
-  
-  govet:
-    disable:
-      - shadow  # Disable variable shadowing (too strict)
-  
-  misspell:
-    locale: US
-  
-  gosec:
-    excludes:
-      - G404  # Allow weak random number generator for non-crypto use
-
-issues:
-  exclude-dirs:
-    - "mocks"
-  exclude-rules:
-    # Be more lenient with test files
-    - path: _test\.go
-      linters:
-        - goconst
-        - dupl
-        - errcheck
-    
-    # Allow some flexibility in main files
-    - path: main\.go
-      linters:
-        - goconst
-  
-  # Don't fail on common patterns
-  exclude:
-    - "should not use dot imports"
-    - "should have a package comment"

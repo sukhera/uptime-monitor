@@ -53,8 +53,6 @@ jobs:
       run: |
         go install github.com/vektra/mockery/v2@latest
         mockery
-        # Fix package name from 'database' to 'mocks'
-        sed -i 's/package database/package mocks/' mocks/*.go
 
     - name: Wait for MongoDB
       run: |
@@ -114,8 +112,6 @@ jobs:
       run: |
         go install github.com/vektra/mockery/v2@latest
         mockery
-        # Fix package name from 'database' to 'mocks'
-        sed -i 's/package database/package mocks/' mocks/*.go
 
     - name: Run golangci-lint
       uses: golangci/golangci-lint-action@v4

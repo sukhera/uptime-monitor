@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Upgrade to Go 1.24 across entire project for consistency and latest features
 - Remove integration tests requiring MongoDB from unit test suite
+- **Fix mockery configuration for proper mock generation**
+  - Update `.mockery.yaml` to use `inpackage: false` with proper `outpkg` configuration
+  - Generate mocks in separate packages with correct imports
+  - Resolve linting errors caused by undefined types in generated mocks
+  - Update CI workflow to remove outdated `sed` commands for package name fixes
 
 ### Fixed
 - Fix Docker build failures due to hadolint casing issues (`as` → `AS`)
@@ -17,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix missing gosec action reference in security workflow
 - Update `github.com/rs/cors` to v1.11.1 to address security vulnerability (GO-2024-2883)
 - Resolve CI/CD pipeline failures and improve reliability
+- **Fix mock generation and linting issues**
+  - Resolve "undefined: Service" errors in generated mock files
+  - Ensure proper type imports in mock files (e.g., `*service.Service`)
+  - Clean up mock generation workflow in CI pipeline
+  - Verify mocks are properly ignored by git (already in `.gitignore`)
 
 ## [0.4.0] - 2025-08-04
 
