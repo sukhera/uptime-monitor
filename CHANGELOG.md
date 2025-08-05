@@ -49,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Implement whitelist-based file access control for enhanced security
   - Add absolute path validation to ensure files are served from static directory
   - Add proper error handling for invalid paths and internal errors
+  - **Enhanced security with filepath.Clean and extension-based validation**
+    - Use `filepath.Clean()` to normalize paths and remove ".." sequences
+    - Implement extension-based whitelist for allowed file types
+    - Add prefix-based validation for directory access
+    - Ensure all user-controlled data is properly sanitized before path operations
 
 ## [0.4.0] - 2025-08-04
 
