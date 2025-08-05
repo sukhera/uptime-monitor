@@ -39,6 +39,13 @@ func TestDatabase_InterfaceCompliance(t *testing.T) {
 }
 
 func TestNewConnection_EmptyDatabase(t *testing.T) {
+	// Skip this test in CI as it can hang due to network timeouts
+	// The test is trying to connect to a non-existent MongoDB instance
+	// which can cause unpredictable behavior in CI environments
+	if testing.Short() {
+		t.Skip("Skipping test in short mode (CI)")
+	}
+
 	// Test with empty database name - should still work
 	// Note: This will fail without a real MongoDB instance
 	db, err := NewConnection("mongodb://nonexistent:27017", "")

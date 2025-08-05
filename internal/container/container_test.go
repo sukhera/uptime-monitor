@@ -106,6 +106,11 @@ func TestContainer_Get(t *testing.T) {
 	assert.NotNil(t, logger)
 
 	// Test getting database (should return error initially)
+	// Skip this test in CI as it tries to connect to MongoDB
+	if testing.Short() {
+		t.Skip("Skipping database connection test in short mode (CI)")
+	}
+
 	db, err := container.GetDatabase()
 	assert.Error(t, err)
 	assert.Nil(t, db)
