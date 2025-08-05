@@ -89,9 +89,6 @@ func runWeb(cmd *cobra.Command, args []string) {
 			requestedPath = "/" + requestedPath
 		}
 
-		// Construct the file path safely
-		filePath := filepath.Join(staticDir, requestedPath)
-
 		// Additional security check: ensure the resolved path is within the static directory
 		absStaticDir, err := filepath.Abs(staticDir)
 		if err != nil {
@@ -99,6 +96,36 @@ func runWeb(cmd *cobra.Command, args []string) {
 			return
 		}
 
+		// Use a more secure approach: only allow specific file types and patterns
+		// This prevents any potential path injection while still supporting SPA routing
+		cleanPath := strings.TrimPrefix(requestedPath, "/")
+
+		// Only allow specific file patterns for security
+		allowedPatterns := []string{
+			"",           // Root path
+			"index.html", // Main SPA file
+			"assets/",    // Asset directory
+			"static/",    // Static files directory
+		}
+
+		isAllowed := false
+		for _, pattern := range allowedPatterns {
+			if cleanPath == pattern || strings.HasPrefix(cleanPath, pattern) {
+				isAllowed = true
+				break
+			}
+		}
+
+		if !isAllowed {
+			// For any other path, serve index.html for SPA routing
+			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
+			return
+		}
+
+		// Construct the file path safely after validation
+		filePath := filepath.Join(staticDir, cleanPath)
+
+		// Final security check: ensure the resolved path is within the static directory
 		absFilePath, err := filepath.Abs(filePath)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -111,7 +138,7 @@ func runWeb(cmd *cobra.Command, args []string) {
 			return
 		}
 
-		// Check if the file exists
+		// Check if the file exists using the validated path
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			// File doesn't exist, serve index.html for SPA routing
 			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
