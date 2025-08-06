@@ -42,7 +42,7 @@ func (cmd *HTTPHealthCheckCommand) Execute(ctx context.Context) service.StatusLo
 			Status:      statusDown,
 			Latency:     0,
 			StatusCode:  0,
-			Error:       fmt.Errorf("Failed to create request: %w", err).Error(),
+			Error:       fmt.Errorf("failed to create request: %w", err).Error(),
 			Timestamp:   time.Now(),
 		}
 	}
@@ -78,7 +78,7 @@ func (cmd *HTTPHealthCheckCommand) Execute(ctx context.Context) service.StatusLo
 
 	if lastErr != nil && resp == nil {
 		statusLog.Status = statusDown
-		statusLog.Error = fmt.Errorf("Request failed after %d attempts: %w", maxRetries, lastErr).Error()
+		statusLog.Error = fmt.Errorf("request failed after %d attempts: %w", maxRetries, lastErr).Error()
 		return statusLog
 	}
 	defer func() {
