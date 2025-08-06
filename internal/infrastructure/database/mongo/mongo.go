@@ -2,10 +2,10 @@ package mongo
 
 import (
 	"context"
-	"log"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 )
 
 // Interface defines the interface for database operations
@@ -38,7 +38,11 @@ func NewConnection(mongoURI, dbName string) (*Database, error) {
 		return nil, err
 	}
 
-	log.Println("Connected to MongoDB successfully")
+	log := logger.Get()
+	log.Info(ctx, "Connected to MongoDB successfully", logger.Fields{
+		"db_name": dbName,
+		"mongo_uri": mongoURI,
+	})
 
 	return &Database{
 		Client: client,

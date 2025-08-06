@@ -5,9 +5,13 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY cmd/status-checker/ ./cmd/status-checker/
-COPY internal/ ./internal/
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o status-checker ./cmd/status-checker
+COPY . .
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_DATE=unknown
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+    -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildDate=${BUILD_DATE} -s -w" \
+    -o status-checker ./cmd/status-checker
 
 FROM debian:bullseye-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*

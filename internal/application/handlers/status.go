@@ -2,8 +2,7 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
+	"errors"
 	"net/http"
 	"time"
 
@@ -15,12 +14,23 @@ import (
 	mongodb "github.com/sukhera/uptime-monitor/internal/infrastructure/database/mongo"
 )
 
+// BuildInfo holds build-time information
+type BuildInfo struct {
+	Version   string
+	Commit    string
+	BuildDate string
+}
+
 type StatusHandler struct {
+	*BaseHandler
 	db *mongodb.Database
 }
 
-func NewStatusHandler(db *mongodb.Database) *StatusHandler {
-	return &StatusHandler{db: db}
+func NewStatusHandler(db *mongodb.Database, buildInfo BuildInfo) *StatusHandler {
+	return &StatusHandler{
+		BaseHandler: NewBaseHandler(buildInfo),
+		db:          db,
+	}
 }
 
 // GetStatus retrieves the current status of all monitored services
@@ -29,17 +39,8 @@ func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 
 	// If no database is available, return empty status array
 	if h.db == nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		w.Header().Set("Pragma", "no-cache")
-		w.Header().Set("Expires", "0")
-
-		// Return empty array
-		if err := json.NewEncoder(w).Encode([]service.ServiceStatus{}); err != nil {
-			h.logError("failed to encode empty response", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
+		h.SetStatusJSONHeaders(w)
+		h.WriteJSON(w, []service.ServiceStatus{}, "failed to encode empty response")
 		return
 	}
 
@@ -50,20 +51,18 @@ func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	opts := options.Find().SetSort(bson.D{primitive.E{Key: "timestamp", Value: -1}}).SetLimit(100)
 	cursor, err := h.db.StatusLogsCollection().Find(ctx, bson.M{}, opts)
 	if err != nil {
-		h.logError("failed to query status logs", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		h.WriteInternalServerError(w, "failed to query status logs", err)
 		return
 	}
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
-			h.logError("failed to close cursor", err)
+			h.LogError("failed to close cursor", err)
 		}
 	}()
 
 	var logs []bson.M
 	if err = cursor.All(ctx, &logs); err != nil {
-		h.logError("failed to decode status logs", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		h.WriteInternalServerError(w, "failed to decode status logs", err)
 		return
 	}
 
@@ -71,7 +70,7 @@ func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	for _, log := range logs {
 		serviceName, ok := log["service_name"].(string)
 		if !ok {
-			h.logError("invalid service name in log", fmt.Errorf("service_name is not a string"))
+			h.LogError("invalid service name in log", errors.New("service_name is not a string"))
 			continue
 		}
 
@@ -83,19 +82,19 @@ func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 			} else if primitiveDateTime, ok := log["timestamp"].(primitive.DateTime); ok {
 				updatedAt = primitiveDateTime.Time()
 			} else {
-				h.logError("invalid timestamp format", fmt.Errorf("timestamp is not a valid time format"))
+				h.LogError("invalid timestamp format", errors.New("timestamp is not a valid time format"))
 				continue
 			}
 
 			status, ok := log["status"].(string)
 			if !ok {
-				h.logError("invalid status in log", fmt.Errorf("status is not a string"))
+				h.LogError("invalid status in log", errors.New("status is not a string"))
 				continue
 			}
 
 			latency, ok := log["latency_ms"].(int64)
 			if !ok {
-				h.logError("invalid latency in log", fmt.Errorf("latency_ms is not an int64"))
+				h.LogError("invalid latency in log", errors.New("latency_ms is not an int64"))
 				continue
 			}
 
@@ -113,17 +112,8 @@ func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 		statuses = append(statuses, status)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-
-	// Return array directly instead of object
-	if err := json.NewEncoder(w).Encode(statuses); err != nil {
-		h.logError("failed to encode response", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
+	h.SetStatusJSONHeaders(w)
+	h.WriteJSON(w, statuses, "failed to encode response")
 }
 
 // HealthCheck provides a simple health check endpoint
@@ -133,85 +123,59 @@ func (h *StatusHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	// Test database connectivity if database is available
 	if h.db != nil {
 		if err := h.db.Client.Ping(ctx, nil); err != nil {
-			h.logError("database health check failed", err)
-			w.Header().Set("Content-Type", "application/json")
+			h.SetJSONHeaders(w)
 			w.WriteHeader(http.StatusServiceUnavailable)
-			if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			h.WriteJSON(w, map[string]interface{}{
 				"status":    "unhealthy",
 				"error":     "database connection failed",
 				"timestamp": time.Now().UTC(),
-			}); err != nil {
-				h.logError("failed to encode health check response", err)
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
-				return
-			}
+			}, "failed to encode health check response")
 			return
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-cache")
-
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":    "healthy",
-		"timestamp": time.Now().UTC(),
-		"version":   "1.0.0", // TODO: Get from build info
-	}); err != nil {
-		h.logError("failed to encode health check response", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-	}
+	h.SetHealthJSONHeaders(w)
+	h.WriteJSON(w, map[string]interface{}{
+		"status":     "healthy",
+		"timestamp":  time.Now().UTC(),
+		"version":    h.buildInfo.Version,
+		"commit":     h.buildInfo.Commit,
+		"build_date": h.buildInfo.BuildDate,
+	}, "failed to encode health check response")
 }
 
 // GetIncidents returns a list of incidents
 func (h *StatusHandler) GetIncidents(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
+	h.SetJSONHeaders(w)
+	
 	// For now, return empty incidents array directly
 	response := []interface{}{}
-
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		h.logError("failed to encode incidents response", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
+	
+	h.WriteJSON(w, response, "failed to encode incidents response")
 }
 
 // GetMaintenance returns maintenance schedule
 func (h *StatusHandler) GetMaintenance(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
+	h.SetJSONHeaders(w)
+	
 	// For now, return empty maintenance array directly
 	response := []interface{}{}
-
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		h.logError("failed to encode maintenance response", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
+	
+	h.WriteJSON(w, response, "failed to encode maintenance response")
 }
 
 // GetTest returns a test response
 func (h *StatusHandler) GetTest(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]string{"message": "test route works"}); err != nil {
-		h.logError("failed to encode test response", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
+	h.SetJSONHeaders(w)
+	h.WriteJSON(w, map[string]string{"message": "test route works"}, "failed to encode test response")
 }
 
 // GetDebug returns debug information
 func (h *StatusHandler) GetDebug(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	if _, err := w.Write([]byte("Debug route works")); err != nil {
-		h.logError("failed to write debug response", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		h.WriteInternalServerError(w, "failed to write debug response", err)
 		return
 	}
 }
 
-// logError provides structured error logging
-func (h *StatusHandler) logError(message string, err error) {
-	// TODO: Replace with proper structured logging (e.g., logrus, zap)
-	fmt.Printf("[ERROR] %s: %v\n", message, err)
-}

@@ -2,10 +2,10 @@ package mongo
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/sukhera/uptime-monitor/internal/domain/service"
 	"github.com/sukhera/uptime-monitor/internal/shared/errors"
+	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -27,7 +27,7 @@ func NewServiceRepository(db Interface) *ServiceRepository {
 // Create creates a new service
 func (r *ServiceRepository) Create(ctx context.Context, svc *service.Service) error {
 	if err := svc.Validate(); err != nil {
-		return errors.NewValidationError(fmt.Sprintf("invalid service: %v", err))
+		return errors.NewWithCause("invalid service", errors.ErrorKindValidation, err)
 	}
 
 	result, err := r.db.ServicesCollection().InsertOne(ctx, svc)
@@ -85,7 +85,8 @@ func (r *ServiceRepository) GetAll(ctx context.Context) ([]*service.Service, err
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
 			// Log error but don't fail the operation
-			fmt.Printf("Error closing cursor: %v\n", err)
+			log := logger.Get()
+			log.Error(ctx, "Error closing cursor", err, nil)
 		}
 	}()
 
@@ -107,7 +108,8 @@ func (r *ServiceRepository) GetEnabled(ctx context.Context) ([]*service.Service,
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
 			// Log error but don't fail the operation
-			fmt.Printf("Error closing cursor: %v\n", err)
+			log := logger.Get()
+			log.Error(ctx, "Error closing cursor", err, nil)
 		}
 	}()
 
@@ -122,7 +124,7 @@ func (r *ServiceRepository) GetEnabled(ctx context.Context) ([]*service.Service,
 // Update updates an existing service
 func (r *ServiceRepository) Update(ctx context.Context, svc *service.Service) error {
 	if err := svc.Validate(); err != nil {
-		return errors.NewValidationError(fmt.Sprintf("invalid service: %v", err))
+		return errors.NewWithCause("invalid service", errors.ErrorKindValidation, err)
 	}
 
 	// For now, we'll update by slug since Service doesn't have an ID field
@@ -186,7 +188,8 @@ func (r *ServiceRepository) GetLatestStatus(ctx context.Context) ([]*service.Ser
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
 			// Log error but don't fail the operation
-			fmt.Printf("Error closing cursor: %v\n", err)
+			log := logger.Get()
+			log.Error(ctx, "Error closing cursor", err, nil)
 		}
 	}()
 
@@ -223,7 +226,8 @@ func (r *ServiceRepository) GetStatusHistory(ctx context.Context, serviceName st
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
 			// Log error but don't fail the operation
-			fmt.Printf("Error closing cursor: %v\n", err)
+			log := logger.Get()
+			log.Error(ctx, "Error closing cursor", err, nil)
 		}
 	}()
 

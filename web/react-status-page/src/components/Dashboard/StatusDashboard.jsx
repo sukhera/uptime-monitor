@@ -5,7 +5,7 @@ import ServiceCard from './ServiceCard';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 const StatusDashboard = () => {
-  const { data: services, loading, error, refetch } = useApi('/api/status');
+  const { data: services, loading, error, refetch } = useApi('/api/v1/status');
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
   // Auto-refresh every 60 seconds

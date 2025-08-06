@@ -1,8 +1,8 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,8 +13,10 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/sukhera/uptime-monitor/internal/application/handlers"
-	// "github.com/sukhera/uptime-monitor/internal/application/middleware"
+	"github.com/sukhera/uptime-monitor/internal/application/middleware"
 	mongodb "github.com/sukhera/uptime-monitor/internal/infrastructure/database/mongo"
+	"github.com/sukhera/uptime-monitor/internal/shared/config"
+	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 )
 
 var apiCmd = &cobra.Command{
@@ -48,72 +50,131 @@ func init() {
 	apiCmd.Flags().StringVar(&dbName, "db-name", "status_page", "MongoDB database name")
 
 	// Bind flags to viper
+	ctx := context.Background()
+	log := logger.Get()
+	
 	if err := viper.BindPFlag("api.port", apiCmd.Flags().Lookup("port")); err != nil {
-		log.Fatalf("Failed to bind api.port flag: %v", err)
+		log.Fatal(ctx, "Failed to bind api.port flag", err, nil)
 	}
 	if err := viper.BindPFlag("database.url", apiCmd.Flags().Lookup("db-url")); err != nil {
-		log.Fatalf("Failed to bind database.url flag: %v", err)
+		log.Fatal(ctx, "Failed to bind database.url flag", err, nil)
 	}
 	if err := viper.BindPFlag("database.name", apiCmd.Flags().Lookup("db-name")); err != nil {
-		log.Fatalf("Failed to bind database.name flag: %v", err)
+		log.Fatal(ctx, "Failed to bind database.name flag", err, nil)
 	}
 }
 
 func runAPI(cmd *cobra.Command, args []string) {
+	// Initialize logger
+	log := logger.Get()
+	ctx := context.Background()
+	
+	// Load configuration with proper precedence (flags > env > config file)
+	cfg := config.LoadFromViper()
+	
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		log.Fatal(ctx, "Invalid configuration", err, logger.Fields{})
+	}
+	
 	// Initialize database
-	db, err := mongodb.NewConnection(dbURL, dbName)
+	db, err := mongodb.NewConnection(cfg.Database.URI, cfg.Database.Name)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatal(ctx, "Failed to connect to database", err, logger.Fields{"db_url": cfg.Database.URI, "db_name": cfg.Database.Name})
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
-			log.Printf("Error closing database connection: %v", err)
+			log.Error(ctx, "Error closing database connection", err, nil)
 		}
 	}()
 
+	// Get build info
+	version, commit, buildDate := GetBuildInfo()
+	buildInfo := handlers.BuildInfo{
+		Version:   version,
+		Commit:    commit,
+		BuildDate: buildDate,
+	}
+	if buildInfo.Version == "" {
+		buildInfo.Version = "dev"
+	}
+	
 	// Initialize handlers
-	statusHandler := handlers.NewStatusHandler(db)
+	statusHandler := handlers.NewStatusHandler(db, buildInfo)
 
 	// Setup routes using gorilla/mux
 	router := http.NewServeMux()
 
-	// Add routes
-	router.HandleFunc("/api/status", statusHandler.GetStatus)
-	router.HandleFunc("/api/health", statusHandler.HealthCheck)
-	router.HandleFunc("/api/incidents", statusHandler.GetIncidents)
-	router.HandleFunc("/api/maintenance", statusHandler.GetMaintenance)
-	router.HandleFunc("/api/test", func(w http.ResponseWriter, r *http.Request) {
+	// Add versioned routes (v1)
+	router.HandleFunc("/api/v1/status", statusHandler.GetStatus)
+	router.HandleFunc("/api/v1/health", statusHandler.HealthCheck)
+	router.HandleFunc("/api/v1/incidents", statusHandler.GetIncidents)
+	router.HandleFunc("/api/v1/maintenance", statusHandler.GetMaintenance)
+	
+	// Backward compatibility - redirect old routes to v1
+	router.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/api/v1/status", http.StatusMovedPermanently)
+	})
+	router.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/api/v1/health", http.StatusMovedPermanently)
+	})
+	router.HandleFunc("/api/incidents", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/api/v1/incidents", http.StatusMovedPermanently)
+	})
+	router.HandleFunc("/api/maintenance", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/api/v1/maintenance", http.StatusMovedPermanently)
+	})
+	
+	// Test endpoint (versioned)
+	router.HandleFunc("/api/v1/test", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]string{"message": "test route works"}); err != nil {
-			log.Printf("Error encoding test response: %v", err)
+			log.Error(ctx, "Error encoding test response", err, nil)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 	})
+	// Debug endpoint (versioned)
+	router.HandleFunc("/api/v1/debug", statusHandler.GetDebug)
+	
+	// Backward compatibility - redirect old debug route to v1
 	router.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		if _, err := w.Write([]byte("Debug route works")); err != nil {
-			log.Printf("Error writing debug response: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
+		http.Redirect(w, r, "/api/v1/debug", http.StatusMovedPermanently)
 	})
 
 	// Debug: Print registered routes
-	log.Printf("Registered routes:")
-	log.Printf("  GET /api/status")
-	log.Printf("  GET /api/health")
-	log.Printf("  GET /api/incidents")
-	log.Printf("  GET /api/maintenance")
+	log.Info(ctx, "Registered routes", logger.Fields{
+		"v1_routes": []string{
+			"GET /api/v1/status",
+			"GET /api/v1/health",
+			"GET /api/v1/incidents",
+			"GET /api/v1/maintenance",
+			"GET /api/v1/test",
+			"GET /api/v1/debug",
+		},
+		"legacy_redirects": []string{
+			"GET /api/status → /api/v1/status",
+			"GET /api/health → /api/v1/health",
+			"GET /api/incidents → /api/v1/incidents", 
+			"GET /api/maintenance → /api/v1/maintenance",
+			"GET /debug → /api/v1/debug",
+		},
+	})
 
-	// Add CORS middleware
-	// corsMiddleware := middleware.NewCORS()
-	// handler := corsMiddleware.Handler(router)
-	handler := router // Temporarily use router directly
+	// Add middleware chain
+	var handler http.Handler = router
+	
+	// Add API versioning middleware
+	handler = middleware.APIVersion("v1")(handler)
+	
+	// CORS middleware is available but not enabled by default
+	// corsMiddleware := middleware.NewCORS()  
+	// handler = corsMiddleware.Handler(handler)
 
 	// Create server
+	apiPort := viper.GetString("api.port")
 	server := &http.Server{
-		Addr:              ":" + port,
+		Addr:              ":" + apiPort,
 		Handler:           handler,
 		ReadHeaderTimeout: 30 * time.Second, // Prevent Slowloris attacks
 	}
@@ -124,18 +185,32 @@ func runAPI(cmd *cobra.Command, args []string) {
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		<-sigChan
 
-		log.Println("Shutting down server...")
-		if err := server.Close(); err != nil {
-			log.Printf("Error shutting down server: %v", err)
+		log.Info(ctx, "Shutting down server", nil)
+		
+		// Create context with timeout for graceful shutdown
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Error(ctx, "Error during graceful shutdown, forcing close", err, nil)
+			if err := server.Close(); err != nil {
+				log.Error(ctx, "Error forcing server close", err, nil)
+			}
+		} else {
+			log.Info(ctx, "Server shutdown completed gracefully", nil)
 		}
 	}()
 
 	// Start server
-	log.Printf("Starting API server on port %s", port)
-	log.Printf("Health check: http://localhost:%s/api/health", port)
-	log.Printf("Status endpoint: http://localhost:%s/api/status", port)
+	log.Info(ctx, "Starting API server", logger.Fields{
+		"port": apiPort,
+		"health_check_url": "http://localhost:" + apiPort + "/api/v1/health",
+		"status_url": "http://localhost:" + apiPort + "/api/v1/status",
+		"legacy_health_url": "http://localhost:" + apiPort + "/api/health (redirects to v1)",
+		"legacy_status_url": "http://localhost:" + apiPort + "/api/status (redirects to v1)",
+	})
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Failed to start server: %v", err)
+		log.Fatal(ctx, "Failed to start server", err, logger.Fields{"port": apiPort})
 	}
 }

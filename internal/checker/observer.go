@@ -2,7 +2,6 @@ package checker
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/sukhera/uptime-monitor/internal/shared/logger"
@@ -89,7 +88,7 @@ func (o *LoggingObserver) OnHealthCheckCompleted(ctx context.Context, event Heal
 
 	if event.Error != "" {
 		fields["error"] = event.Error
-		o.logger.Error(ctx, "Health check failed", fmt.Errorf("%s", event.Error), fields)
+		o.logger.Error(ctx, "Health check failed", nil, fields)
 	} else {
 		o.logger.Info(ctx, "Health check completed", fields)
 	}

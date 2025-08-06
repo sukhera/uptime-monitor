@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,6 +12,8 @@ import (
 
 	"github.com/sukhera/uptime-monitor/internal/checker"
 	"github.com/sukhera/uptime-monitor/internal/infrastructure/database/mongo"
+	"github.com/sukhera/uptime-monitor/internal/shared/config"
+	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 )
 
 var checkerCmd = &cobra.Command{
@@ -46,32 +47,40 @@ func init() {
 	checkerCmd.Flags().StringVar(&checkerDBName, "db-name", "status_page", "MongoDB database name")
 
 	// Bind flags to viper
+	ctx := context.Background()
+	log := logger.Get()
+	
 	if err := viper.BindPFlag("checker.interval", checkerCmd.Flags().Lookup("interval")); err != nil {
-		log.Fatalf("Failed to bind checker.interval flag: %v", err)
+		log.Fatal(ctx, "Failed to bind checker.interval flag", err, nil)
 	}
 	if err := viper.BindPFlag("database.url", checkerCmd.Flags().Lookup("db-url")); err != nil {
-		log.Fatalf("Failed to bind database.url flag: %v", err)
+		log.Fatal(ctx, "Failed to bind database.url flag", err, nil)
 	}
 	if err := viper.BindPFlag("database.name", checkerCmd.Flags().Lookup("db-name")); err != nil {
-		log.Fatalf("Failed to bind database.name flag: %v", err)
+		log.Fatal(ctx, "Failed to bind database.name flag", err, nil)
 	}
 }
 
 func runChecker(cmd *cobra.Command, args []string) {
-	// Parse interval
-	checkInterval, err := time.ParseDuration(checkInterval)
-	if err != nil {
-		log.Fatalf("Invalid interval format: %v", err)
+	ctx := context.Background()
+	log := logger.Get()
+	
+	// Load configuration with proper precedence (flags > env > config file)
+	cfg := config.LoadFromViper()
+	
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		log.Fatal(ctx, "Invalid configuration", err, logger.Fields{})
 	}
 
 	// Initialize database
-	db, err := mongo.NewConnection(checkerDBURL, checkerDBName)
+	db, err := mongo.NewConnection(cfg.Database.URI, cfg.Database.Name)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatal(ctx, "Failed to connect to database", err, logger.Fields{"db_url": cfg.Database.URI, "db_name": cfg.Database.Name})
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
-			log.Printf("Error closing database connection: %v", err)
+			log.Error(ctx, "Error closing database connection", err, nil)
 		}
 	}()
 
@@ -88,20 +97,23 @@ func runChecker(cmd *cobra.Command, args []string) {
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		<-sigChan
 
-		log.Println("Shutting down checker...")
+		log.Info(ctx, "Shutting down checker", nil)
 		cancel()
 	}()
 
 	// Start health checking loop
-	log.Printf("Starting health checker with %s interval", checkInterval)
-	log.Printf("Connected to database: %s/%s", checkerDBURL, checkerDBName)
+	log.Info(ctx, "Starting health checker", logger.Fields{
+		"interval": cfg.Checker.Interval.String(),
+		"db_url": cfg.Database.URI,
+		"db_name": cfg.Database.Name,
+	})
 
-	ticker := time.NewTicker(checkInterval)
+	ticker := time.NewTicker(cfg.Checker.Interval)
 	defer ticker.Stop()
 
 	// Run initial check
 	if err := service.RunHealthChecks(ctx); err != nil {
-		log.Printf("Initial health check failed: %v", err)
+		log.Error(ctx, "Initial health check failed", err, nil)
 	}
 
 	// Continue checking at intervals
@@ -109,10 +121,10 @@ func runChecker(cmd *cobra.Command, args []string) {
 		select {
 		case <-ticker.C:
 			if err := service.RunHealthChecks(ctx); err != nil {
-				log.Printf("Health check failed: %v", err)
+				log.Error(ctx, "Health check failed", err, nil)
 			}
 		case <-ctx.Done():
-			log.Println("Checker stopped")
+			log.Info(ctx, "Checker stopped", nil)
 			return
 		}
 	}

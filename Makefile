@@ -8,6 +8,12 @@ DOCKER_COMPOSE_DEV := docker-compose -f docker-compose.yml
 DOCKER_COMPOSE_PROD := docker-compose -f docker-compose.yml -f docker-compose.prod.yml
 DOCKER_COMPOSE_TEST := docker-compose -f docker-compose.test.yml
 
+# Build variables for version injection
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE := $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
+LDFLAGS := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(BUILD_DATE) -s -w
+
 # Colors for output
 RED := \033[0;31m
 GREEN := \033[0;32m
@@ -219,9 +225,20 @@ security-docker: ## Run Docker security scan
 ##@ Build & Deploy
 build: ## Build all services
 	@echo "$(YELLOW)Building all services...$(NC)"
+	@make build-go
 	@make build-frontend
 	@make build-docker
 	@echo "$(GREEN)✓ Build completed!$(NC)"
+
+build-go: ## Build Go binaries with version injection
+	@echo "$(BLUE)Building Go binaries with version $(VERSION)...$(NC)"
+	@mkdir -p bin
+	@echo "Building status-page binary..."
+	@go build -ldflags "$(LDFLAGS)" -o bin/status-page .
+	@echo "Building individual service binaries..."
+	@go build -ldflags "$(LDFLAGS)" -o bin/status-page-api ./cmd/api
+	@go build -ldflags "$(LDFLAGS)" -o bin/status-page-checker ./cmd/status-checker
+	@echo "$(GREEN)✓ Go binaries built successfully$(NC)"
 
 build-frontend: ## Build frontend
 	@echo "$(BLUE)Building frontend...$(NC)"

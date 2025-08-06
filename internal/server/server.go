@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/sukhera/uptime-monitor/internal/application/middleware"
 	"github.com/sukhera/uptime-monitor/internal/shared/config"
+	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 )
 
 // Server represents the HTTP server
@@ -36,12 +36,15 @@ func New(handler http.Handler, cfg *config.Config) *Server {
 
 // Start starts the server with graceful shutdown
 func (s *Server) Start() error {
+	log := logger.Get()
+	ctx := context.Background()
+	
 	// Create a channel to listen for errors coming from the listener
 	serverErrors := make(chan error, 1)
 
 	// Start the server in a goroutine
 	go func() {
-		log.Printf("Starting server on port %s", s.config.Server.Port)
+		log.Info(ctx, "Starting server", logger.Fields{"port": s.config.Server.Port})
 		serverErrors <- s.ListenAndServe()
 	}()
 
@@ -55,19 +58,19 @@ func (s *Server) Start() error {
 		return fmt.Errorf("server error: %w", err)
 
 	case sig := <-shutdown:
-		log.Printf("Received signal %v, starting graceful shutdown", sig)
+		log.Info(ctx, "Received signal, starting graceful shutdown", logger.Fields{"signal": sig.String()})
 
 		// Give outstanding requests a deadline for completion
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		// Gracefully shutdown the server
-		if err := s.Shutdown(ctx); err != nil {
-			log.Printf("Could not stop server gracefully: %v", err)
+		if err := s.Shutdown(shutdownCtx); err != nil {
+			log.Error(ctx, "Could not stop server gracefully", err, nil)
 			return err
 		}
 
-		log.Println("Server stopped gracefully")
+		log.Info(ctx, "Server stopped gracefully", nil)
 		return nil
 	}
 }

@@ -3,12 +3,12 @@ package checker
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/sukhera/uptime-monitor/internal/domain/service"
 	mongodb "github.com/sukhera/uptime-monitor/internal/infrastructure/database/mongo"
+	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -86,7 +86,8 @@ func (s *Service) RunHealthChecks(ctx context.Context) error {
 	}
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
-			log.Printf("[ERROR] Failed to close cursor: %v", err)
+			log := logger.Get()
+			log.Error(ctx, "Failed to close cursor", err, nil)
 		}
 	}()
 
@@ -111,7 +112,8 @@ func (s *Service) RunHealthChecks(ctx context.Context) error {
 	for _, statusLog := range statusLogs {
 		if _, err := s.db.StatusLogsCollection().InsertOne(ctx, statusLog); err != nil {
 			// Log error but continue with other results
-			log.Printf("[ERROR] Failed to insert status log for %s: %v", statusLog.ServiceName, err)
+			log := logger.Get()
+			log.Error(ctx, "Failed to insert status log", err, logger.Fields{"service_name": statusLog.ServiceName})
 		}
 	}
 
@@ -126,7 +128,8 @@ func (s *Service) RunHealthChecksWithObservers(ctx context.Context, subject *Hea
 	}
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
-			log.Printf("[ERROR] Failed to close cursor: %v", err)
+			log := logger.Get()
+			log.Error(ctx, "Failed to close cursor", err, nil)
 		}
 	}()
 
@@ -151,7 +154,8 @@ func (s *Service) RunHealthChecksWithObservers(ctx context.Context, subject *Hea
 	for _, statusLog := range statusLogs {
 		// Store in database
 		if _, err := s.db.StatusLogsCollection().InsertOne(ctx, statusLog); err != nil {
-			log.Printf("[ERROR] Failed to insert status log for %s: %v", statusLog.ServiceName, err)
+			log := logger.Get()
+			log.Error(ctx, "Failed to insert status log", err, logger.Fields{"service_name": statusLog.ServiceName})
 		}
 
 		// Notify observers

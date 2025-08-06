@@ -58,10 +58,16 @@ npm run preview
 
 The frontend expects the following API endpoints:
 
-- `GET /api/status` - Returns array of service statuses
-- `GET /api/health` - Health check endpoint
-- `GET /api/incidents` - Incidents list
-- `GET /api/maintenance` - Maintenance schedule
+- `GET /api/v1/status` - Returns array of service statuses
+- `GET /api/v1/health` - Health check endpoint
+- `GET /api/v1/incidents` - Incidents list
+- `GET /api/v1/maintenance` - Maintenance schedule
+
+Legacy endpoints (automatically redirect to v1):
+- `GET /api/status` → `/api/v1/status`
+- `GET /api/health` → `/api/v1/health`
+- `GET /api/incidents` → `/api/v1/incidents`
+- `GET /api/maintenance` → `/api/v1/maintenance`
 
 ### Service Status Format
 

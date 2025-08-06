@@ -13,10 +13,8 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// Load configuration using functional options pattern
-	cfg := config.New(
-		config.FromEnvironment(),
-	)
+	// Load configuration with proper precedence (flags > env > config file)
+	cfg := config.LoadFromViper()
 
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
