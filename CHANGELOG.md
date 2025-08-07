@@ -65,6 +65,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Add placeholder test script to frontend package.json for make test compatibility
   - Fix Makefile inconsistencies between `lint-frontend` and `test-frontend` target paths
   - Ensure all tests pass successfully in CI/CD pipeline
+- **Fix log injection vulnerabilities**
+  - Add comprehensive input sanitization to prevent log injection attacks
+  - Implement `sanitizeLogString()` function to remove newline and carriage return characters
+  - Sanitize user-controlled input in `internal/application/middleware/security.go:70-76`
+  - Sanitize all string fields, messages, and context values in `internal/shared/logger/logger.go`
+  - Remove `\n` and `\r` characters from URL paths, user agents, and all logged string data
+  - Prevent log forging attacks that could manipulate log files or monitoring systems
 
 ## [0.4.0] - 2025-08-04
 

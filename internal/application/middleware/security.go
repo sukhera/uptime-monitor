@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -67,12 +68,14 @@ func RequestLogger(next http.Handler) http.Handler {
 		duration := time.Since(start)
 		log := logger.Get()
 		ctx := r.Context()
+		safePath := strings.ReplaceAll(strings.ReplaceAll(r.URL.Path, "\n", ""), "\r", "")
+		safeUserAgent := strings.ReplaceAll(strings.ReplaceAll(r.UserAgent(), "\n", ""), "\r", "")
 		log.Info(ctx, "HTTP request processed", logger.Fields{
 			"method": r.Method,
-			"path": r.URL.Path,
+			"path": safePath,
 			"status_code": ww.statusCode,
 			"duration_ms": duration.Milliseconds(),
-			"user_agent": r.UserAgent(),
+			"user_agent": safeUserAgent,
 			"remote_addr": r.RemoteAddr,
 		})
 	})
