@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 )
 
 var (
@@ -129,4 +131,14 @@ func setupEnvBindings() {
 	_ = viper.BindEnv("web.port", "WEB_PORT")
 	_ = viper.BindEnv("web.api_url", "API_URL")
 	_ = viper.BindEnv("web.static_dir", "STATIC_DIR")
+}
+
+// bindFlagToViper binds a cobra command flag to viper with error handling
+func bindFlagToViper(cmd *cobra.Command, viperKey, flagName string) {
+	ctx := context.Background()
+	log := logger.Get()
+	
+	if err := viper.BindPFlag(viperKey, cmd.Flags().Lookup(flagName)); err != nil {
+		log.Fatal(ctx, fmt.Sprintf("Failed to bind %s flag", viperKey), err, nil)
+	}
 }

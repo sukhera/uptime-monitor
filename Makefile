@@ -183,7 +183,11 @@ lint-go: ## Run Go linter
 
 lint-frontend: ## Run frontend linter
 	@echo "$(BLUE)Running frontend linter...$(NC)"
-	@cd web && npm run lint
+	@if [ -f web/react-status-page/package.json ]; then \
+		cd web/react-status-page && npm run lint; \
+	else \
+		echo "$(YELLOW)No package.json found - skipping frontend linting$(NC)"; \
+	fi
 
 format: ## Format all code
 	@echo "$(YELLOW)Formatting code...$(NC)"
@@ -198,7 +202,11 @@ format-go: ## Format Go code
 
 format-frontend: ## Format frontend code
 	@echo "$(BLUE)Formatting frontend code...$(NC)"
-	@cd web && npm run format
+	@if [ -f web/react-status-page/package.json ]; then \
+		echo "$(YELLOW)No format script configured - skipping frontend formatting$(NC)"; \
+	else \
+		echo "$(YELLOW)No package.json found - skipping frontend formatting$(NC)"; \
+	fi
 
 ##@ Security
 security: ## Run security scans

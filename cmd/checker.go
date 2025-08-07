@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"github.com/sukhera/uptime-monitor/internal/checker"
 	"github.com/sukhera/uptime-monitor/internal/infrastructure/database/mongo"
@@ -47,18 +46,9 @@ func init() {
 	checkerCmd.Flags().StringVar(&checkerDBName, "db-name", "status_page", "MongoDB database name")
 
 	// Bind flags to viper
-	ctx := context.Background()
-	log := logger.Get()
-	
-	if err := viper.BindPFlag("checker.interval", checkerCmd.Flags().Lookup("interval")); err != nil {
-		log.Fatal(ctx, "Failed to bind checker.interval flag", err, nil)
-	}
-	if err := viper.BindPFlag("database.url", checkerCmd.Flags().Lookup("db-url")); err != nil {
-		log.Fatal(ctx, "Failed to bind database.url flag", err, nil)
-	}
-	if err := viper.BindPFlag("database.name", checkerCmd.Flags().Lookup("db-name")); err != nil {
-		log.Fatal(ctx, "Failed to bind database.name flag", err, nil)
-	}
+	bindFlagToViper(checkerCmd, "checker.interval", "interval")
+	bindFlagToViper(checkerCmd, "database.url", "db-url")
+	bindFlagToViper(checkerCmd, "database.name", "db-name")
 }
 
 func runChecker(cmd *cobra.Command, args []string) {

@@ -161,7 +161,7 @@ func TestHTTPHealthCheckCommand_Execute_NetworkError(t *testing.T) {
 	assert.Equal(t, "down", result.Status)
 	assert.Equal(t, 0, result.StatusCode)
 	assert.True(t, result.Latency >= 0) // Latency can be 0 for very fast responses
-	assert.Contains(t, result.Error, "Request failed after 3 attempts")
+	assert.Contains(t, result.Error, "request failed after 3 attempts")
 }
 
 func TestHTTPHealthCheckCommand_Execute_WithHeaders(t *testing.T) {
@@ -399,7 +399,7 @@ func TestHTTPHealthCheckCommand_Execute_RetryLogic(t *testing.T) {
 	result := command.Execute(ctx)
 
 	assert.Equal(t, "down", result.Status)
-	assert.Contains(t, result.Error, "Request failed after 3 attempts")
+	assert.Contains(t, result.Error, "request failed after 3 attempts")
 }
 
 func TestHealthCheckInvoker_Integration(t *testing.T) {

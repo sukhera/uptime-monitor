@@ -50,18 +50,9 @@ func init() {
 	apiCmd.Flags().StringVar(&dbName, "db-name", "status_page", "MongoDB database name")
 
 	// Bind flags to viper
-	ctx := context.Background()
-	log := logger.Get()
-	
-	if err := viper.BindPFlag("api.port", apiCmd.Flags().Lookup("port")); err != nil {
-		log.Fatal(ctx, "Failed to bind api.port flag", err, nil)
-	}
-	if err := viper.BindPFlag("database.url", apiCmd.Flags().Lookup("db-url")); err != nil {
-		log.Fatal(ctx, "Failed to bind database.url flag", err, nil)
-	}
-	if err := viper.BindPFlag("database.name", apiCmd.Flags().Lookup("db-name")); err != nil {
-		log.Fatal(ctx, "Failed to bind database.name flag", err, nil)
-	}
+	bindFlagToViper(apiCmd, "api.port", "port")
+	bindFlagToViper(apiCmd, "database.url", "db-url")
+	bindFlagToViper(apiCmd, "database.name", "db-name")
 }
 
 func runAPI(cmd *cobra.Command, args []string) {

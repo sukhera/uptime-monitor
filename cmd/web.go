@@ -47,18 +47,9 @@ func init() {
 	webCmd.Flags().StringVar(&staticDir, "static-dir", "./web/react-status-page/dist", "Static files directory")
 
 	// Bind flags to viper
-	ctx := context.Background()
-	log := logger.Get()
-	
-	if err := viper.BindPFlag("web.port", webCmd.Flags().Lookup("port")); err != nil {
-		log.Fatal(ctx, "Failed to bind web.port flag", err, nil)
-	}
-	if err := viper.BindPFlag("web.api_url", webCmd.Flags().Lookup("api-url")); err != nil {
-		log.Fatal(ctx, "Failed to bind web.api_url flag", err, nil)
-	}
-	if err := viper.BindPFlag("web.static_dir", webCmd.Flags().Lookup("static-dir")); err != nil {
-		log.Fatal(ctx, "Failed to bind web.static_dir flag", err, nil)
-	}
+	bindFlagToViper(webCmd, "web.port", "port")
+	bindFlagToViper(webCmd, "web.api_url", "api-url")
+	bindFlagToViper(webCmd, "web.static_dir", "static-dir")
 }
 
 func runWeb(cmd *cobra.Command, args []string) {
