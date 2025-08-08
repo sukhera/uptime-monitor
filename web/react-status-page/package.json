@@ -8,7 +8,8 @@
     "dev:local": "VITE_API_URL=http://localhost:8080/api vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "echo 'No tests specified' && exit 0"
   },
   "dependencies": {
     "axios": "^1.11.0",

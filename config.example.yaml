@@ -1,0 +1,42 @@
+# Status Page Configuration Example
+# Copy this file to config.yaml and modify as needed
+
+# Server configuration
+server:
+  port: "8080"
+  read_timeout: "15s"
+  write_timeout: "15s"
+  idle_timeout: "60s"
+
+# Database configuration
+database:
+  url: "mongodb://localhost:27017"
+  name: "statuspage"
+  timeout: "10s"
+
+# Logging configuration
+logging:
+  level: "info"  # debug, info, warn, error, fatal
+  json: false    # Set to true for JSON structured logs
+
+# Health checker configuration
+checker:
+  interval: "2m"  # How often to run health checks
+
+# API server configuration
+api:
+  port: "8080"
+
+# Web dashboard configuration  
+web:
+  port: "3000"
+  api_url: "http://localhost:8080"
+  static_dir: "./web/react-status-page/dist"
+
+# You can also use environment variables:
+# - PORT or API_PORT for API server port
+# - WEB_PORT for web server port
+# - MONGO_URI or DB_URL for database connection
+# - DB_NAME for database name
+# - LOG_LEVEL for logging level
+# - CHECK_INTERVAL for health check interval

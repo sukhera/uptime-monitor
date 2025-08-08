@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sukhera/uptime-monitor/internal/domain/service"
+	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 )
 
 // HealthCheckCommand represents a health check command
@@ -41,7 +42,7 @@ func (cmd *HTTPHealthCheckCommand) Execute(ctx context.Context) service.StatusLo
 			Status:      statusDown,
 			Latency:     0,
 			StatusCode:  0,
-			Error:       fmt.Sprintf("Failed to create request: %v", err),
+			Error:       fmt.Errorf("failed to create request: %w", err).Error(),
 			Timestamp:   time.Now(),
 		}
 	}
@@ -77,13 +78,14 @@ func (cmd *HTTPHealthCheckCommand) Execute(ctx context.Context) service.StatusLo
 
 	if lastErr != nil && resp == nil {
 		statusLog.Status = statusDown
-		statusLog.Error = fmt.Sprintf("Request failed after %d attempts: %v", maxRetries, lastErr)
+		statusLog.Error = fmt.Errorf("request failed after %d attempts: %w", maxRetries, lastErr).Error()
 		return statusLog
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			// Log error but don't fail the health check
-			fmt.Printf("Error closing response body: %v\n", err)
+			log := logger.Get()
+			log.Error(ctx, "Error closing response body", err, nil)
 		}
 	}()
 

@@ -1,17 +1,21 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 )
 
 var (
-	cfgFile string
-	verbose bool
-	version string
+	cfgFile   string
+	verbose   bool
+	version   string
+	commit    string
+	buildDate string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -51,6 +55,19 @@ func SetVersion(v string) {
 	rootCmd.Version = v
 }
 
+// SetBuildInfo sets all build information
+func SetBuildInfo(v, c, bd string) {
+	version = v
+	commit = c
+	buildDate = bd
+	rootCmd.Version = v
+}
+
+// GetBuildInfo returns the build information
+func GetBuildInfo() (string, string, string) {
+	return version, commit, buildDate
+}
+
 func init() {
 	cobra.OnInitialize(initConfig)
 
@@ -74,12 +91,54 @@ func initConfig() {
 		viper.SetConfigName("config")
 	}
 
-	viper.AutomaticEnv() // read in environment variables that match
+	// Set environment variable prefix and enable automatic env binding
+	viper.SetEnvPrefix("STATUS_PAGE")
+	viper.AutomaticEnv()
+
+	// Map environment variables to viper keys for compatibility
+	setupEnvBindings()
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		if verbose {
 			fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 		}
+	}
+}
+
+// setupEnvBindings maps common environment variables to viper keys
+func setupEnvBindings() {
+	// Server/API environment variables
+	_ = viper.BindEnv("api.port", "PORT", "API_PORT")
+	_ = viper.BindEnv("server.port", "PORT", "SERVER_PORT")
+	_ = viper.BindEnv("server.read_timeout", "READ_TIMEOUT")
+	_ = viper.BindEnv("server.write_timeout", "WRITE_TIMEOUT")
+	_ = viper.BindEnv("server.idle_timeout", "IDLE_TIMEOUT")
+
+	// Database environment variables
+	_ = viper.BindEnv("database.url", "MONGO_URI", "DB_URL", "DATABASE_URL")
+	_ = viper.BindEnv("database.name", "DB_NAME", "DATABASE_NAME")
+	_ = viper.BindEnv("database.timeout", "DB_TIMEOUT")
+
+	// Logging environment variables
+	_ = viper.BindEnv("logging.level", "LOG_LEVEL")
+	_ = viper.BindEnv("logging.json", "LOG_JSON")
+
+	// Checker environment variables
+	_ = viper.BindEnv("checker.interval", "CHECK_INTERVAL", "CHECKER_INTERVAL")
+
+	// Web environment variables
+	_ = viper.BindEnv("web.port", "WEB_PORT")
+	_ = viper.BindEnv("web.api_url", "API_URL")
+	_ = viper.BindEnv("web.static_dir", "STATIC_DIR")
+}
+
+// bindFlagToViper binds a cobra command flag to viper with error handling
+func bindFlagToViper(cmd *cobra.Command, viperKey, flagName string) {
+	ctx := context.Background()
+	log := logger.Get()
+	
+	if err := viper.BindPFlag(viperKey, cmd.Flags().Lookup(flagName)); err != nil {
+		log.Fatal(ctx, fmt.Sprintf("Failed to bind %s flag", viperKey), err, nil)
 	}
 }

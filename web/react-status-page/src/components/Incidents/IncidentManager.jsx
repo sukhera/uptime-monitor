@@ -5,8 +5,8 @@ import MaintenanceSchedule from './MaintenanceSchedule';
 
 const IncidentManager = () => {
   const [activeTab, setActiveTab] = useState('incidents');
-  const { data: incidents } = useApi('/api/incidents');
-  const { data: maintenance } = useApi('/api/maintenance');
+  const { data: incidents } = useApi('/api/v1/incidents');
+  const { data: maintenance } = useApi('/api/v1/maintenance');
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

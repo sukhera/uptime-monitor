@@ -158,7 +158,14 @@ func (c *Container) GetStatusHandler() (*handlers.StatusHandler, error) {
 		return nil, fmt.Errorf("database is not MongoDB implementation")
 	}
 
-	handler := handlers.NewStatusHandler(mongoDB)
+	// Create build info with defaults
+	buildInfo := handlers.BuildInfo{
+		Version:   "dev",
+		Commit:    "unknown", 
+		BuildDate: "unknown",
+	}
+	
+	handler := handlers.NewStatusHandler(mongoDB, buildInfo)
 	c.Register("status_handler", handler)
 	return handler, nil
 }

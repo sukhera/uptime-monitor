@@ -5,6 +5,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 // Config holds all configuration for the application
@@ -137,6 +139,65 @@ func New(options ...Option) *Config {
 func Load() *Config {
 	return New(FromEnvironment())
 }
+
+// LoadFromViper loads configuration with proper precedence (flags > env > config file)
+func LoadFromViper() *Config {
+	// Set viper defaults first
+	setViperDefaults()
+
+	config := &Config{
+		Server: ServerConfig{
+			Port:         viper.GetString("server.port"),
+			ReadTimeout:  viper.GetDuration("server.read_timeout"),
+			WriteTimeout: viper.GetDuration("server.write_timeout"),
+			IdleTimeout:  viper.GetDuration("server.idle_timeout"),
+		},
+		Database: DatabaseConfig{
+			URI:     viper.GetString("database.url"),
+			Name:    viper.GetString("database.name"),
+			Timeout: viper.GetDuration("database.timeout"),
+		},
+		Logging: LoggingConfig{
+			Level: viper.GetString("logging.level"),
+			JSON:  viper.GetBool("logging.json"),
+		},
+		Checker: CheckerConfig{
+			Interval: viper.GetDuration("checker.interval"),
+		},
+	}
+
+	return config
+}
+
+// setViperDefaults sets default values in viper
+func setViperDefaults() {
+	// Server defaults
+	viper.SetDefault("server.port", "8080")
+	viper.SetDefault("server.read_timeout", "15s")
+	viper.SetDefault("server.write_timeout", "15s")
+	viper.SetDefault("server.idle_timeout", "60s")
+
+	// Database defaults
+	viper.SetDefault("database.url", "mongodb://localhost:27017")
+	viper.SetDefault("database.name", "statuspage")
+	viper.SetDefault("database.timeout", "10s")
+
+	// Logging defaults
+	viper.SetDefault("logging.level", "info")
+	viper.SetDefault("logging.json", false)
+
+	// Checker defaults
+	viper.SetDefault("checker.interval", "2m")
+
+	// API defaults (for consistency with current flags)
+	viper.SetDefault("api.port", "8080")
+
+	// Web defaults
+	viper.SetDefault("web.port", "3000")
+	viper.SetDefault("web.api_url", "http://localhost:8080")
+	viper.SetDefault("web.static_dir", "./web/react-status-page/dist")
+}
+
 
 // Validate validates the configuration
 func (c *Config) Validate() error {

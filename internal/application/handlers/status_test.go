@@ -26,7 +26,8 @@ func TestNewStatusHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewStatusHandler(nil)
+			buildInfo := BuildInfo{Version: "test", Commit: "test", BuildDate: "test"}
+			handler := NewStatusHandler(nil, buildInfo)
 			assert.Equal(t, tt.expected, handler != nil)
 		})
 	}
@@ -52,7 +53,8 @@ func TestStatusHandler_HealthCheck(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create handler with nil database (for unit testing)
-			handler := NewStatusHandler(nil)
+			buildInfo := BuildInfo{Version: "test", Commit: "test", BuildDate: "test"}
+			handler := NewStatusHandler(nil, buildInfo)
 			req := testutil.CreateTestHTTPRequest(tt.method, tt.path, nil)
 			w := testutil.CreateTestHTTPResponse()
 
@@ -96,7 +98,8 @@ func TestStatusHandler_GetStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create handler with nil database
-			handler := NewStatusHandler(nil)
+			buildInfo := BuildInfo{Version: "test", Commit: "test", BuildDate: "test"}
+			handler := NewStatusHandler(nil, buildInfo)
 			req := testutil.CreateTestHTTPRequest(tt.method, tt.path, nil)
 			w := testutil.CreateTestHTTPResponse()
 

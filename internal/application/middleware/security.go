@@ -3,9 +3,11 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
+	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 )
 
 // SecurityHeaders adds security headers to responses
@@ -64,9 +66,18 @@ func RequestLogger(next http.Handler) http.Handler {
 
 		// Log request details
 		duration := time.Since(start)
-		// TODO: Replace with structured logging
-		_ = duration // TODO: Use duration in structured logging
-		// log.Printf("[INFO] %s %s %d %v", r.Method, r.URL.Path, ww.statusCode, duration)
+		log := logger.Get()
+		ctx := r.Context()
+		safePath := strings.ReplaceAll(strings.ReplaceAll(r.URL.Path, "\n", ""), "\r", "")
+		safeUserAgent := strings.ReplaceAll(strings.ReplaceAll(r.UserAgent(), "\n", ""), "\r", "")
+		log.Info(ctx, "HTTP request processed", logger.Fields{
+			"method": r.Method,
+			"path": safePath,
+			"status_code": ww.statusCode,
+			"duration_ms": duration.Milliseconds(),
+			"user_agent": safeUserAgent,
+			"remote_addr": r.RemoteAddr,
+		})
 	})
 }
 
@@ -143,4 +154,15 @@ func getClientIP(r *http.Request) string {
 	}
 
 	return r.RemoteAddr
+}
+
+// APIVersion adds API version headers to responses
+func APIVersion(version string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("API-Version", version)
+			w.Header().Set("X-API-Version", version)
+			next.ServeHTTP(w, r)
+		})
+	}
 }

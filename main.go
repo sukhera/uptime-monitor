@@ -4,12 +4,16 @@ import (
 	"github.com/sukhera/uptime-monitor/cmd"
 )
 
-// Version will be set at build time via ldflags
-var Version = "dev"
+// Version information - will be set at build time via ldflags
+var (
+	Version   = "dev"
+	Commit    = "unknown"
+	BuildDate = "unknown"
+)
 
 func main() {
-	// Set version in the root command
-	cmd.SetVersion(Version)
+	// Set build information in the root command
+	cmd.SetBuildInfo(Version, Commit, BuildDate)
 
 	// Execute the root command
 	cmd.Execute()

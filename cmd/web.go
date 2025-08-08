@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"log"
+	"context"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 )
 
 var webCmd = &cobra.Command{
@@ -46,24 +47,29 @@ func init() {
 	webCmd.Flags().StringVar(&staticDir, "static-dir", "./web/react-status-page/dist", "Static files directory")
 
 	// Bind flags to viper
-	if err := viper.BindPFlag("web.port", webCmd.Flags().Lookup("port")); err != nil {
-		log.Fatalf("Failed to bind web.port flag: %v", err)
-	}
-	if err := viper.BindPFlag("web.api_url", webCmd.Flags().Lookup("api-url")); err != nil {
-		log.Fatalf("Failed to bind web.api_url flag: %v", err)
-	}
-	if err := viper.BindPFlag("web.static_dir", webCmd.Flags().Lookup("static-dir")); err != nil {
-		log.Fatalf("Failed to bind web.static_dir flag: %v", err)
-	}
+	bindFlagToViper(webCmd, "web.port", "port")
+	bindFlagToViper(webCmd, "web.api_url", "api-url")
+	bindFlagToViper(webCmd, "web.static_dir", "static-dir")
 }
 
 func runWeb(cmd *cobra.Command, args []string) {
+	ctx := context.Background()
+	log := logger.Get()
+	
+	// Get configuration values from Viper
+	webPort := viper.GetString("web.port")
+	apiURL := viper.GetString("web.api_url")
+	staticDir := viper.GetString("web.static_dir")
+	
 	// Check if static directory exists
 	if _, err := os.Stat(staticDir); os.IsNotExist(err) {
-		log.Printf("Static directory not found: %s", staticDir)
-		log.Println("Please build the React app first:")
-		log.Println("  cd web/react-status-page && npm run build")
-		log.Println("  or use Docker: docker-compose up web")
+		log.Error(ctx, "Static directory not found", nil, logger.Fields{
+			"static_dir": staticDir,
+			"instructions": []string{
+				"cd web/react-status-page && npm run build",
+				"or use Docker: docker-compose up web",
+			},
+		})
 		os.Exit(1)
 	}
 
@@ -132,19 +138,31 @@ func runWeb(cmd *cobra.Command, args []string) {
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		<-sigChan
 
-		log.Println("Shutting down web server...")
-		if err := server.Close(); err != nil {
-			log.Printf("Error shutting down server: %v", err)
+		log.Info(ctx, "Shutting down web server", nil)
+		
+		// Create context with timeout for graceful shutdown
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Error(ctx, "Error during graceful shutdown, forcing close", err, nil)
+			if err := server.Close(); err != nil {
+				log.Error(ctx, "Error forcing server close", err, nil)
+			}
+		} else {
+			log.Info(ctx, "Web server shutdown completed gracefully", nil)
 		}
 	}()
 
 	// Start server
-	log.Printf("Starting web server on port %s", webPort)
-	log.Printf("Serving static files from: %s", staticDir)
-	log.Printf("Web dashboard: http://localhost:%s", webPort)
-	log.Printf("API server should be running at: %s", apiURL)
+	log.Info(ctx, "Starting web server", logger.Fields{
+		"port": webPort,
+		"static_dir": staticDir,
+		"dashboard_url": "http://localhost:" + webPort,
+		"api_url": apiURL,
+	})
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Failed to start web server: %v", err)
+		log.Fatal(ctx, "Failed to start web server", err, logger.Fields{"port": webPort})
 	}
 }

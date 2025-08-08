@@ -3,6 +3,7 @@ package logger
 import (
 	"context"
 	"os"
+	"strings"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -124,7 +125,7 @@ func (l *ZapLogger) Error(ctx context.Context, message string, err error, fields
 		fields = make(Fields)
 	}
 	if err != nil {
-		fields["error"] = err.Error()
+		fields["error"] = sanitizeLogString(err.Error())
 	}
 	l.logWithLevel(ctx, zapcore.ErrorLevel, message, err, fields)
 }
@@ -135,7 +136,7 @@ func (l *ZapLogger) Fatal(ctx context.Context, message string, err error, fields
 		fields = make(Fields)
 	}
 	if err != nil {
-		fields["error"] = err.Error()
+		fields["error"] = sanitizeLogString(err.Error())
 	}
 	l.logWithLevel(ctx, zapcore.FatalLevel, message, err, fields)
 	os.Exit(1)
@@ -195,7 +196,7 @@ func (l *ZapLogger) logWithLevel(ctx context.Context, level zapcore.Level, messa
 	zapFields := make([]zap.Field, 0, len(fields)+2)
 
 	// Add message field
-	zapFields = append(zapFields, zap.String("message", message))
+	zapFields = append(zapFields, zap.String("message", sanitizeLogString(message)))
 
 	// Add level field
 	zapFields = append(zapFields, zap.String("level", level.String()))
@@ -204,7 +205,7 @@ func (l *ZapLogger) logWithLevel(ctx context.Context, level zapcore.Level, messa
 	for k, v := range fields {
 		switch val := v.(type) {
 		case string:
-			zapFields = append(zapFields, zap.String(k, val))
+			zapFields = append(zapFields, zap.String(k, sanitizeLogString(val)))
 		case int:
 			zapFields = append(zapFields, zap.Int(k, val))
 		case int64:
@@ -248,6 +249,11 @@ func (l *ZapLogger) logWithLevel(ctx context.Context, level zapcore.Level, messa
 	}
 }
 
+// sanitizeLogString removes newline and carriage return characters to prevent log injection
+func sanitizeLogString(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, "\n", ""), "\r", "")
+}
+
 // getContextValue safely extracts a value from context
 func getContextValue(ctx context.Context, key string) string {
 	if ctx == nil {
@@ -255,7 +261,7 @@ func getContextValue(ctx context.Context, key string) string {
 	}
 	if val := ctx.Value(key); val != nil {
 		if str, ok := val.(string); ok {
-			return str
+			return sanitizeLogString(str)
 		}
 	}
 	return ""
