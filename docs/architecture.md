@@ -43,8 +43,6 @@ The Status Page application consists of several key components:
 
 ```
 status_page_starter/
-├── .claude/                 # Claude AI configuration
-├── .cursor/                 # Cursor IDE configuration
 ├── cmd/                     # Command-line applications
 │   ├── api/                # API server entry point
 │   │   └── main.go         # API server main
@@ -165,50 +163,51 @@ status_page_starter/
 ├── testutil/                # Test utilities
 │   └── helper.go           # Test helper functions
 ├── web/                     # Frontend application
-│   ├── react-status-page/  # React application
-│   │   ├── dist/           # Built assets
-│   │   │   └── assets/     # Compiled assets
+│   ├── react-status-page/  # React application (Vite + Tailwind)
+│   │   ├── dist/           # Built assets (ignored in git)
 │   │   ├── public/         # Public assets
-│   │   └── src/            # Source code
-│   │       ├── assets/     # Static assets
-│   │       ├── components/ # React components
-│   │       │   ├── Dashboard/ # Dashboard components
-│   │       │   │   ├── ServiceCard.jsx # Service card
-│   │       │   │   ├── StatusDashboard.jsx # Status dashboard
-│   │       │   │   └── StatusIndicator.jsx # Status indicator
-│   │       │   ├── Incidents/ # Incident components
-│   │       │   │   ├── IncidentCard.jsx # Incident card
-│   │       │   │   ├── IncidentManager.jsx # Incident manager
-│   │       │   │   └── MaintenanceSchedule.jsx # Maintenance
-│   │       │   ├── Layout/ # Layout components
-│   │       │   │   ├── Footer.jsx # Footer
-│   │       │   │   ├── Header.jsx # Header
-│   │       │   │   └── ThemeToggle.jsx # Theme toggle
-│   │       │   └── common/ # Common components
-│   │       │       ├── ErrorBoundary.jsx # Error boundary
-│   │       │       └── LoadingSpinner.jsx # Loading spinner
-│   │       ├── contexts/   # React contexts
-│   │       │   └── ThemeContext.jsx # Theme context
-│   │       ├── hooks/      # Custom hooks
-│   │       │   ├── useApi.js # API hook
-│   │       │   └── usePolling.js # Polling hook
-│   │       ├── services/   # API services
-│   │       ├── utils/      # Utility functions
-│   │       ├── App.jsx     # Main app component
-│   │       └── main.jsx    # App entry point
+│   │   │   └── vite.svg    # Vite logo
+│   │   ├── src/            # React source code
+│   │   │   ├── assets/     # Static assets
+│   │   │   │   └── react.svg # React logo
+│   │   │   ├── components/ # React components
+│   │   │   │   ├── Dashboard/ # Dashboard components
+│   │   │   │   │   ├── ServiceCard.jsx # Service card
+│   │   │   │   │   ├── StatusDashboard.jsx # Status dashboard
+│   │   │   │   │   └── StatusIndicator.jsx # Status indicator
+│   │   │   │   ├── Incidents/ # Incident components
+│   │   │   │   │   ├── IncidentCard.jsx # Incident card
+│   │   │   │   │   ├── IncidentManager.jsx # Incident manager
+│   │   │   │   │   └── MaintenanceSchedule.jsx # Maintenance
+│   │   │   │   ├── Layout/ # Layout components
+│   │   │   │   │   ├── Footer.jsx # Footer
+│   │   │   │   │   ├── Header.jsx # Header
+│   │   │   │   │   └── ThemeToggle.jsx # Theme toggle
+│   │   │   │   └── common/ # Common components
+│   │   │   │       ├── ErrorBoundary.jsx # Error boundary
+│   │   │   │       └── LoadingSpinner.jsx # Loading spinner
+│   │   │   ├── contexts/   # React contexts
+│   │   │   │   └── ThemeContext.jsx # Theme context
+│   │   │   ├── hooks/      # Custom hooks
+│   │   │   │   ├── useApi.js # API hook
+│   │   │   │   └── usePolling.js # Polling hook
+│   │   │   ├── services/   # API services
+│   │   │   ├── utils/      # Utility functions
+│   │   │   ├── App.jsx     # Main app component
+│   │   │   ├── index.css   # Global styles
+│   │   │   └── main.jsx    # App entry point
+│   │   ├── Dockerfile      # Docker configuration
 │   │   ├── eslint.config.js # ESLint configuration
+│   │   ├── index.html      # HTML entry point
+│   │   ├── nginx.conf      # Nginx configuration
 │   │   ├── package.json    # NPM dependencies
 │   │   ├── postcss.config.js # PostCSS configuration
 │   │   ├── tailwind.config.js # Tailwind CSS configuration
 │   │   └── vite.config.js  # Vite configuration
-│   └── src/                # Legacy frontend
-│       ├── components/     # Legacy components
-│       │   ├── IncidentManager.js # Incident manager
-│       │   └── StatusDashboard.js # Status dashboard
-│       ├── services/       # Legacy services
-│       │   └── api.js      # API service
-│       ├── styles/         # Legacy styles
-│       └── main.js         # Legacy entry point
+│   ├── Dockerfile.dev      # Development Docker config
+│   ├── jest.config.js      # Jest testing configuration
+│   ├── package-lock.json   # NPM lock file
+│   └── public/             # Shared public assets
 ├── .golangci.yml           # Go linter configuration
 ├── .mockery.yaml           # Mockery configuration
 ├── CHANGELOG.md            # Change log

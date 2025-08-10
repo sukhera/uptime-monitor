@@ -148,6 +148,15 @@ func Load() *Config {
 func LoadFromViper() *Config {
 	// Set viper defaults first
 	setViperDefaults()
+	
+	// Enable reading from environment variables
+	viper.AutomaticEnv()
+	
+	// Bind specific environment variables to viper keys
+	_ = viper.BindEnv("database.url", "MONGO_URI")
+	_ = viper.BindEnv("server.port", "PORT")
+	_ = viper.BindEnv("logging.level", "LOG_LEVEL")
+	_ = viper.BindEnv("checker.interval", "CHECK_INTERVAL")
 
 	config := &Config{
 		Server: ServerConfig{

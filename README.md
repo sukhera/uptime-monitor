@@ -2,10 +2,12 @@
 
 A small, production‑minded starter for a public status page and uptime monitor. Backend is Go + MongoDB; frontend is React + Tailwind; everything runs via Docker Compose.
 
-![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)
-![Build Status](https://img.shields.io/badge/build-passing-green.svg)
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
+[![CI](https://github.com/sukhera/uptime-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/sukhera/uptime-monitor/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)](https://golang.org/)
+[![Coverage](https://img.shields.io/badge/coverage-check%20CI-blue.svg)](https://github.com/sukhera/uptime-monitor/actions/workflows/ci.yml)
+[![Security](https://img.shields.io/badge/security-gosec%20%7C%20trivy-green.svg)](https://github.com/sukhera/uptime-monitor/actions/workflows/security.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](docker-compose.yml)
 
 ## What This Is
 
