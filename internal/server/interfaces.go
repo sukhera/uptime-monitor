@@ -10,6 +10,9 @@ type Interface interface {
 	// Start starts the server
 	Start() error
 
+	// StartWithContext starts the server with context for graceful shutdown
+	StartWithContext(ctx context.Context) error
+
 	// Stop gracefully stops the server
 	Stop(ctx context.Context) error
 

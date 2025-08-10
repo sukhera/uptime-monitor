@@ -12,10 +12,14 @@ type Interface interface {
 	// Connection management
 	Close() error
 	Ping(ctx context.Context) error
+	HealthCheck(ctx context.Context) error
+	EnsureIndexes(ctx context.Context) error
 
 	// Collection access
 	ServicesCollection() *mongo.Collection
 	StatusLogsCollection() *mongo.Collection
+	IncidentsCollection() *mongo.Collection
+	MaintenancesCollection() *mongo.Collection
 
 	// Database operations
 	Find(ctx context.Context, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)

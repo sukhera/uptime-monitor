@@ -14,10 +14,14 @@ import (
 // MockDatabase is a simple mock for testing
 type MockDatabase struct{}
 
-func (m *MockDatabase) Close() error                            { return nil }
-func (m *MockDatabase) Ping(ctx context.Context) error          { return nil }
-func (m *MockDatabase) ServicesCollection() *mongo.Collection   { return nil }
-func (m *MockDatabase) StatusLogsCollection() *mongo.Collection { return nil }
+func (m *MockDatabase) Close() error                              { return nil }
+func (m *MockDatabase) Ping(ctx context.Context) error            { return nil }
+func (m *MockDatabase) HealthCheck(ctx context.Context) error     { return nil }
+func (m *MockDatabase) EnsureIndexes(ctx context.Context) error   { return nil }
+func (m *MockDatabase) ServicesCollection() *mongo.Collection     { return nil }
+func (m *MockDatabase) StatusLogsCollection() *mongo.Collection   { return nil }
+func (m *MockDatabase) IncidentsCollection() *mongo.Collection    { return nil }
+func (m *MockDatabase) MaintenancesCollection() *mongo.Collection { return nil }
 func (m *MockDatabase) Find(ctx context.Context, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
 	return nil, nil
 }

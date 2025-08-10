@@ -59,15 +59,15 @@ func runAPI(cmd *cobra.Command, args []string) {
 	// Initialize logger
 	log := logger.Get()
 	ctx := context.Background()
-	
+
 	// Load configuration with proper precedence (flags > env > config file)
 	cfg := config.LoadFromViper()
-	
+
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		log.Fatal(ctx, "Invalid configuration", err, logger.Fields{})
 	}
-	
+
 	// Initialize database
 	db, err := mongodb.NewConnection(cfg.Database.URI, cfg.Database.Name)
 	if err != nil {
@@ -89,7 +89,7 @@ func runAPI(cmd *cobra.Command, args []string) {
 	if buildInfo.Version == "" {
 		buildInfo.Version = "dev"
 	}
-	
+
 	// Initialize handlers
 	statusHandler := handlers.NewStatusHandler(db, buildInfo)
 
@@ -101,7 +101,7 @@ func runAPI(cmd *cobra.Command, args []string) {
 	router.HandleFunc("/api/v1/health", statusHandler.HealthCheck)
 	router.HandleFunc("/api/v1/incidents", statusHandler.GetIncidents)
 	router.HandleFunc("/api/v1/maintenance", statusHandler.GetMaintenance)
-	
+
 	// Backward compatibility - redirect old routes to v1
 	router.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/api/v1/status", http.StatusMovedPermanently)
@@ -115,7 +115,7 @@ func runAPI(cmd *cobra.Command, args []string) {
 	router.HandleFunc("/api/maintenance", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/api/v1/maintenance", http.StatusMovedPermanently)
 	})
-	
+
 	// Test endpoint (versioned)
 	router.HandleFunc("/api/v1/test", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -127,7 +127,7 @@ func runAPI(cmd *cobra.Command, args []string) {
 	})
 	// Debug endpoint (versioned)
 	router.HandleFunc("/api/v1/debug", statusHandler.GetDebug)
-	
+
 	// Backward compatibility - redirect old debug route to v1
 	router.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/api/v1/debug", http.StatusMovedPermanently)
@@ -146,7 +146,7 @@ func runAPI(cmd *cobra.Command, args []string) {
 		"legacy_redirects": []string{
 			"GET /api/status → /api/v1/status",
 			"GET /api/health → /api/v1/health",
-			"GET /api/incidents → /api/v1/incidents", 
+			"GET /api/incidents → /api/v1/incidents",
 			"GET /api/maintenance → /api/v1/maintenance",
 			"GET /debug → /api/v1/debug",
 		},
@@ -154,12 +154,12 @@ func runAPI(cmd *cobra.Command, args []string) {
 
 	// Add middleware chain
 	var handler http.Handler = router
-	
+
 	// Add API versioning middleware
 	handler = middleware.APIVersion("v1")(handler)
-	
+
 	// CORS middleware is available but not enabled by default
-	// corsMiddleware := middleware.NewCORS()  
+	// corsMiddleware := middleware.NewCORS()
 	// handler = corsMiddleware.Handler(handler)
 
 	// Create server
@@ -177,11 +177,11 @@ func runAPI(cmd *cobra.Command, args []string) {
 		<-sigChan
 
 		log.Info(ctx, "Shutting down server", nil)
-		
+
 		// Create context with timeout for graceful shutdown
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		
+
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			log.Error(ctx, "Error during graceful shutdown, forcing close", err, nil)
 			if err := server.Close(); err != nil {
@@ -194,9 +194,9 @@ func runAPI(cmd *cobra.Command, args []string) {
 
 	// Start server
 	log.Info(ctx, "Starting API server", logger.Fields{
-		"port": apiPort,
-		"health_check_url": "http://localhost:" + apiPort + "/api/v1/health",
-		"status_url": "http://localhost:" + apiPort + "/api/v1/status",
+		"port":              apiPort,
+		"health_check_url":  "http://localhost:" + apiPort + "/api/v1/health",
+		"status_url":        "http://localhost:" + apiPort + "/api/v1/status",
 		"legacy_health_url": "http://localhost:" + apiPort + "/api/health (redirects to v1)",
 		"legacy_status_url": "http://localhost:" + apiPort + "/api/status (redirects to v1)",
 	})

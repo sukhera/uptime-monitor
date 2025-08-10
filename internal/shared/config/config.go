@@ -19,10 +19,11 @@ type Config struct {
 
 // ServerConfig holds server-specific configuration
 type ServerConfig struct {
-	Port         string
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	IdleTimeout  time.Duration
+	Port              string
+	ReadTimeout       time.Duration
+	ReadHeaderTimeout time.Duration
+	WriteTimeout      time.Duration
+	IdleTimeout       time.Duration
 }
 
 // DatabaseConfig holds database-specific configuration
@@ -54,9 +55,10 @@ func WithServerPort(port string) Option {
 }
 
 // WithServerTimeouts sets server timeouts
-func WithServerTimeouts(read, write, idle time.Duration) Option {
+func WithServerTimeouts(read, readHeader, write, idle time.Duration) Option {
 	return func(c *Config) {
 		c.Server.ReadTimeout = read
+		c.Server.ReadHeaderTimeout = readHeader
 		c.Server.WriteTimeout = write
 		c.Server.IdleTimeout = idle
 	}
@@ -91,6 +93,7 @@ func FromEnvironment() Option {
 	return func(c *Config) {
 		c.Server.Port = getEnv("PORT", "8080")
 		c.Server.ReadTimeout = getDurationEnv("READ_TIMEOUT", 15*time.Second)
+		c.Server.ReadHeaderTimeout = getDurationEnv("READ_HEADER_TIMEOUT", 5*time.Second)
 		c.Server.WriteTimeout = getDurationEnv("WRITE_TIMEOUT", 15*time.Second)
 		c.Server.IdleTimeout = getDurationEnv("IDLE_TIMEOUT", 60*time.Second)
 
@@ -109,10 +112,11 @@ func FromEnvironment() Option {
 func New(options ...Option) *Config {
 	config := &Config{
 		Server: ServerConfig{
-			Port:         "8080",
-			ReadTimeout:  15 * time.Second,
-			WriteTimeout: 15 * time.Second,
-			IdleTimeout:  60 * time.Second,
+			Port:              "8080",
+			ReadTimeout:       15 * time.Second,
+			ReadHeaderTimeout: 5 * time.Second,
+			WriteTimeout:      15 * time.Second,
+			IdleTimeout:       60 * time.Second,
 		},
 		Database: DatabaseConfig{
 			URI:     "mongodb://localhost:27017",
@@ -147,10 +151,11 @@ func LoadFromViper() *Config {
 
 	config := &Config{
 		Server: ServerConfig{
-			Port:         viper.GetString("server.port"),
-			ReadTimeout:  viper.GetDuration("server.read_timeout"),
-			WriteTimeout: viper.GetDuration("server.write_timeout"),
-			IdleTimeout:  viper.GetDuration("server.idle_timeout"),
+			Port:              viper.GetString("server.port"),
+			ReadTimeout:       viper.GetDuration("server.read_timeout"),
+			ReadHeaderTimeout: viper.GetDuration("server.read_header_timeout"),
+			WriteTimeout:      viper.GetDuration("server.write_timeout"),
+			IdleTimeout:       viper.GetDuration("server.idle_timeout"),
 		},
 		Database: DatabaseConfig{
 			URI:     viper.GetString("database.url"),
@@ -174,6 +179,7 @@ func setViperDefaults() {
 	// Server defaults
 	viper.SetDefault("server.port", "8080")
 	viper.SetDefault("server.read_timeout", "15s")
+	viper.SetDefault("server.read_header_timeout", "5s")
 	viper.SetDefault("server.write_timeout", "15s")
 	viper.SetDefault("server.idle_timeout", "60s")
 
@@ -198,23 +204,62 @@ func setViperDefaults() {
 	viper.SetDefault("web.static_dir", "./web/react-status-page/dist")
 }
 
-
 // Validate validates the configuration
 func (c *Config) Validate() error {
+	// Server validation
 	if c.Server.Port == "" {
 		return fmt.Errorf("server port cannot be empty")
 	}
 
+	if c.Server.ReadTimeout <= 0 {
+		return fmt.Errorf("server read timeout must be positive")
+	}
+
+	if c.Server.ReadHeaderTimeout <= 0 {
+		return fmt.Errorf("server read header timeout must be positive")
+	}
+
+	if c.Server.WriteTimeout <= 0 {
+		return fmt.Errorf("server write timeout must be positive")
+	}
+
+	if c.Server.IdleTimeout <= 0 {
+		return fmt.Errorf("server idle timeout must be positive")
+	}
+
+	// Database validation
 	if c.Database.URI == "" {
-		return fmt.Errorf("database URI cannot be empty")
+		return fmt.Errorf("database URI cannot be empty (required)")
 	}
 
 	if c.Database.Name == "" {
-		return fmt.Errorf("database name cannot be empty")
+		return fmt.Errorf("database name cannot be empty (required)")
 	}
 
+	if c.Database.Timeout <= 0 {
+		return fmt.Errorf("database timeout must be positive")
+	}
+
+	// Checker validation
 	if c.Checker.Interval <= 0 {
 		return fmt.Errorf("checker interval must be positive")
+	}
+
+	// Logging validation
+	if c.Logging.Level == "" {
+		return fmt.Errorf("logging level cannot be empty")
+	}
+
+	validLevels := []string{"debug", "info", "warn", "error", "fatal", "panic"}
+	isValidLevel := false
+	for _, level := range validLevels {
+		if c.Logging.Level == level {
+			isValidLevel = true
+			break
+		}
+	}
+	if !isValidLevel {
+		return fmt.Errorf("invalid logging level: %s (must be one of: debug, info, warn, error, fatal, panic)", c.Logging.Level)
 	}
 
 	return nil

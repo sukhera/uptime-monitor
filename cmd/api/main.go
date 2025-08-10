@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/sukhera/uptime-monitor/internal/application/routes"
 	"github.com/sukhera/uptime-monitor/internal/container"
@@ -11,7 +14,9 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
+	// Create context that cancels on interrupt signals
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 
 	// Load configuration with proper precedence (flags > env > config file)
 	cfg := config.LoadFromViper()
@@ -43,12 +48,12 @@ func main() {
 	// Log registered routes
 	logRoutes(log)
 
-	// Start server
+	// Start server with context
 	log.Info(ctx, "Starting HTTP server", logger.Fields{
 		"address": httpServer.GetAddr(),
 	})
 
-	if err := httpServer.Start(); err != nil {
+	if err := httpServer.StartWithContext(ctx); err != nil {
 		log.Fatal(ctx, "Server failed to start", err, logger.Fields{})
 	}
 }
