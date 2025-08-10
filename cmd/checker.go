@@ -54,10 +54,10 @@ func init() {
 func runChecker(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 	log := logger.Get()
-	
+
 	// Load configuration with proper precedence (flags > env > config file)
 	cfg := config.LoadFromViper()
-	
+
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		log.Fatal(ctx, "Invalid configuration", err, logger.Fields{})
@@ -94,8 +94,8 @@ func runChecker(cmd *cobra.Command, args []string) {
 	// Start health checking loop
 	log.Info(ctx, "Starting health checker", logger.Fields{
 		"interval": cfg.Checker.Interval.String(),
-		"db_url": cfg.Database.URI,
-		"db_name": cfg.Database.Name,
+		"db_url":   cfg.Database.URI,
+		"db_name":  cfg.Database.Name,
 	})
 
 	ticker := time.NewTicker(cfg.Checker.Interval)

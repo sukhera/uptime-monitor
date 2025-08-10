@@ -17,7 +17,7 @@ func SetupRoutes(statusHandler *handlers.StatusHandler) *http.ServeMux {
 	router.HandleFunc("/api/v1/maintenance", statusHandler.GetMaintenance)
 	router.HandleFunc("/api/v1/test", statusHandler.GetTest)
 	router.HandleFunc("/api/v1/debug", statusHandler.GetDebug)
-	
+
 	// Backward compatibility - redirect old routes to v1
 	router.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/api/v1/status", http.StatusMovedPermanently)

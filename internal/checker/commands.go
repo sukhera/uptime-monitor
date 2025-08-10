@@ -2,8 +2,9 @@ package checker
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"sync"
 	"time"
@@ -177,7 +178,7 @@ func (invoker *HealthCheckInvoker) ExecuteAll(ctx context.Context) []service.Sta
 func (invoker *HealthCheckInvoker) executeWithWorkerPool(ctx context.Context) []service.StatusLog {
 	jobs := make(chan HealthCheckCommand, len(invoker.commands))
 	results := make(chan service.StatusLog, len(invoker.commands))
-	
+
 	// Create semaphore for per-service concurrency control
 	semaphore := make(chan struct{}, invoker.config.MaxConcurrent)
 
@@ -236,13 +237,19 @@ func (invoker *HealthCheckInvoker) worker(ctx context.Context, jobs <-chan Healt
 
 			// Add jitter before executing
 			if invoker.config.JitterMaxDuration > 0 {
-				jitter := time.Duration(rand.Int63n(int64(invoker.config.JitterMaxDuration)))
+				maxJitter := big.NewInt(int64(invoker.config.JitterMaxDuration))
+				n, err := rand.Int(rand.Reader, maxJitter)
+				if err != nil {
+					// Fallback to no jitter on error
+					n = big.NewInt(0)
+				}
+				jitter := time.Duration(n.Int64())
 				time.Sleep(jitter)
 			}
 
 			// Execute with per-probe timeout and retry logic
 			result := invoker.executeCommandWithRetry(ctx, cmd)
-			
+
 			// Release semaphore
 			<-semaphore
 
@@ -266,7 +273,7 @@ func (invoker *HealthCheckInvoker) executeCommandWithRetry(ctx context.Context, 
 	for attempt := 0; attempt < invoker.config.RetryAttempts; attempt++ {
 		// Create context with per-probe timeout
 		probeCtx, cancel := context.WithTimeout(ctx, invoker.config.PerProbeTimeout)
-		
+
 		// Execute command
 		result := cmd.Execute(probeCtx)
 		cancel()

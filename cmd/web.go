@@ -55,12 +55,12 @@ func init() {
 func runWeb(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 	log := logger.Get()
-	
+
 	// Get configuration values from Viper
 	webPort := viper.GetString("web.port")
 	apiURL := viper.GetString("web.api_url")
 	staticDir := viper.GetString("web.static_dir")
-	
+
 	// Check if static directory exists
 	if _, err := os.Stat(staticDir); os.IsNotExist(err) {
 		log.Error(ctx, "Static directory not found", nil, logger.Fields{
@@ -139,11 +139,11 @@ func runWeb(cmd *cobra.Command, args []string) {
 		<-sigChan
 
 		log.Info(ctx, "Shutting down web server", nil)
-		
+
 		// Create context with timeout for graceful shutdown
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		
+
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			log.Error(ctx, "Error during graceful shutdown, forcing close", err, nil)
 			if err := server.Close(); err != nil {
@@ -156,10 +156,10 @@ func runWeb(cmd *cobra.Command, args []string) {
 
 	// Start server
 	log.Info(ctx, "Starting web server", logger.Fields{
-		"port": webPort,
-		"static_dir": staticDir,
+		"port":          webPort,
+		"static_dir":    staticDir,
 		"dashboard_url": "http://localhost:" + webPort,
-		"api_url": apiURL,
+		"api_url":       apiURL,
 	})
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

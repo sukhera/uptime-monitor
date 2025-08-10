@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/time/rate"
 	"github.com/sukhera/uptime-monitor/internal/shared/logger"
+	"golang.org/x/time/rate"
 )
 
 // SecurityHeaders adds security headers to responses
@@ -71,11 +71,11 @@ func RequestLogger(next http.Handler) http.Handler {
 		safePath := strings.ReplaceAll(strings.ReplaceAll(r.URL.Path, "\n", ""), "\r", "")
 		safeUserAgent := strings.ReplaceAll(strings.ReplaceAll(r.UserAgent(), "\n", ""), "\r", "")
 		log.Info(ctx, "HTTP request processed", logger.Fields{
-			"method": r.Method,
-			"path": safePath,
+			"method":      r.Method,
+			"path":        safePath,
 			"status_code": ww.statusCode,
 			"duration_ms": duration.Milliseconds(),
-			"user_agent": safeUserAgent,
+			"user_agent":  safeUserAgent,
 			"remote_addr": r.RemoteAddr,
 		})
 	})

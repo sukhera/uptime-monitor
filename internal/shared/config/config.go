@@ -204,7 +204,6 @@ func setViperDefaults() {
 	viper.SetDefault("web.static_dir", "./web/react-status-page/dist")
 }
 
-
 // Validate validates the configuration
 func (c *Config) Validate() error {
 	// Server validation

@@ -147,20 +147,20 @@ func (h *StatusHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 // GetIncidents returns a list of incidents
 func (h *StatusHandler) GetIncidents(w http.ResponseWriter, r *http.Request) {
 	h.SetJSONHeaders(w)
-	
+
 	// For now, return empty incidents array directly
 	response := []interface{}{}
-	
+
 	h.WriteJSON(w, response, "failed to encode incidents response")
 }
 
 // GetMaintenance returns maintenance schedule
 func (h *StatusHandler) GetMaintenance(w http.ResponseWriter, r *http.Request) {
 	h.SetJSONHeaders(w)
-	
+
 	// For now, return empty maintenance array directly
 	response := []interface{}{}
-	
+
 	h.WriteJSON(w, response, "failed to encode maintenance response")
 }
 
@@ -178,4 +178,3 @@ func (h *StatusHandler) GetDebug(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
-

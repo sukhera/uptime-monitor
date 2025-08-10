@@ -137,7 +137,7 @@ func setupEnvBindings() {
 func bindFlagToViper(cmd *cobra.Command, viperKey, flagName string) {
 	ctx := context.Background()
 	log := logger.Get()
-	
+
 	if err := viper.BindPFlag(viperKey, cmd.Flags().Lookup(flagName)); err != nil {
 		log.Fatal(ctx, fmt.Sprintf("Failed to bind %s flag", viperKey), err, nil)
 	}

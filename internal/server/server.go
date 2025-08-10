@@ -40,7 +40,7 @@ func (s *Server) Start() error {
 // StartWithContext starts the server with context for graceful shutdown
 func (s *Server) StartWithContext(ctx context.Context) error {
 	log := logger.Get()
-	
+
 	// Create a channel to listen for errors coming from the listener
 	serverErrors := make(chan error, 1)
 

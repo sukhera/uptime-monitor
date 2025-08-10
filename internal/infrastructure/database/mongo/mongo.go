@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 )
 
 // Interface defines the interface for database operations

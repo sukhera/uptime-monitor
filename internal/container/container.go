@@ -161,10 +161,10 @@ func (c *Container) GetStatusHandler() (*handlers.StatusHandler, error) {
 	// Create build info with defaults
 	buildInfo := handlers.BuildInfo{
 		Version:   "dev",
-		Commit:    "unknown", 
+		Commit:    "unknown",
 		BuildDate: "unknown",
 	}
-	
+
 	handler := handlers.NewStatusHandler(mongoDB, buildInfo)
 	c.Register("status_handler", handler)
 	return handler, nil
