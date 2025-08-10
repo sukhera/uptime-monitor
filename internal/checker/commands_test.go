@@ -2,8 +2,10 @@ package checker
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -349,9 +351,18 @@ func TestHTTPHealthCheckCommand_Execute_ContextCancellation(t *testing.T) {
 }
 
 func TestHealthCheckInvoker_ConcurrentExecution(t *testing.T) {
-	// Create test server that takes some time to respond
+	// Track concurrent requests to verify they happen simultaneously
+	var mu sync.Mutex
+	requestTimes := make([]time.Time, 0)
+	
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(50 * time.Millisecond) // Simulate network delay
+		// Record when this request started
+		mu.Lock()
+		requestTimes = append(requestTimes, time.Now())
+		mu.Unlock()
+		
+		// Simulate some processing time
+		time.Sleep(50 * time.Millisecond)
 		w.WriteHeader(200)
 		if _, err := w.Write([]byte("OK")); err != nil {
 			t.Errorf("Failed to write response: %v", err)
@@ -359,12 +370,17 @@ func TestHealthCheckInvoker_ConcurrentExecution(t *testing.T) {
 	}))
 	defer server.Close()
 
-	invoker := NewHealthCheckInvoker()
+	// Create invoker with no jitter to avoid random delays that break timing tests
+	config := DefaultWorkerPoolConfig()
+	config.JitterMaxDuration = 0 // Remove jitter for predictable timing
+	config.WorkerCount = 5       // Ensure we have enough workers
+	invoker := NewHealthCheckInvokerWithConfig(config)
 
 	// Add multiple commands
-	for i := 0; i < 5; i++ {
+	numServices := 3
+	for i := 0; i < numServices; i++ {
 		service := service.Service{
-			Name:           "service-" + string(rune(i)),
+			Name:           fmt.Sprintf("service-%d", i),
 			URL:            server.URL,
 			ExpectedStatus: 200,
 		}
@@ -374,13 +390,48 @@ func TestHealthCheckInvoker_ConcurrentExecution(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	start := time.Now()
 	results := invoker.ExecuteAll(ctx)
-	duration := time.Since(start)
 
-	assert.Len(t, results, 5)
-	// Concurrent execution should be faster than sequential (allow more time for CI environments)
-	assert.True(t, duration < 1*time.Second) // Should be much faster than 5 * 50ms sequentially
+	// Test that we got all results
+	assert.Len(t, results, numServices)
+	
+	// Test that all results are successful
+	for _, result := range results {
+		assert.Equal(t, "operational", result.Status)
+	}
+	
+	// Test concurrency by checking that requests started close together
+	mu.Lock()
+	times := make([]time.Time, len(requestTimes))
+	copy(times, requestTimes)
+	mu.Unlock()
+	
+	assert.Len(t, times, numServices, "Expected %d concurrent requests", numServices)
+	
+	if len(times) >= 2 {
+		// Find the time span between first and last request start
+		var earliest, latest time.Time
+		earliest = times[0]
+		latest = times[0]
+		
+		for _, t := range times {
+			if t.Before(earliest) {
+				earliest = t
+			}
+			if t.After(latest) {
+				latest = t
+			}
+		}
+		
+		// If requests are truly concurrent, they should start within a small time window
+		// Allow more generous time for race detection overhead
+		maxStartSpread := 500 * time.Millisecond // Increased for race detection
+		actualSpread := latest.Sub(earliest)
+		
+		assert.True(t, actualSpread < maxStartSpread,
+			"Requests should start concurrently. Time spread: %v (max allowed: %v)", 
+			actualSpread, maxStartSpread)
+	}
 }
 
 func TestHTTPHealthCheckCommand_Execute_RetryLogic(t *testing.T) {

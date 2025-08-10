@@ -2,6 +2,7 @@ version: '3.9'
 
 services:
   mongo:
+    image: mongo:6.0
     container_name: status-mongo-dev
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
@@ -11,6 +12,14 @@ services:
       - mongo_dev_data:/data/db
     ports:
       - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ismaster')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - status-network
 
   status-checker:
     build:
@@ -26,6 +35,11 @@ services:
       HOT_RELOAD: ${HOT_RELOAD:-true}
       RETENTION_DAYS: ${RETENTION_DAYS:-30}
     command: air -c configs/dev/air.toml
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - status-network
 
   api:
     build:
@@ -42,6 +56,11 @@ services:
       HOT_RELOAD: ${HOT_RELOAD:-true}
       JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_not_for_production}
     command: air -c configs/dev/air.toml
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - status-network
 
   web:
     build:
@@ -60,6 +79,12 @@ services:
     ports:
       - "3000:3000"
     command: npm run dev -- --host 0.0.0.0
+    networks:
+      - status-network
+
+networks:
+  status-network:
+    driver: bridge
 
 volumes:
   mongo_dev_data:

@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   nginx:
-    image: nginx:alpine
+    image: nginx:1.24-alpine
     container_name: status-nginx-prod
     ports:
       - "80:80"
@@ -24,6 +24,7 @@ services:
       retries: 3
 
   mongo:
+    image: mongo:6.0
     container_name: status-mongo-prod
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
@@ -34,6 +35,14 @@ services:
       - ./backups:/backups
     command: mongod --auth
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ismaster')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - status-network
     # Remove port exposure for security
     ports: []
 
@@ -89,6 +98,17 @@ services:
           memory: 256M
           cpus: '0.5'
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - status-network
+    depends_on:
+      mongo:
+        condition: service_healthy
     # Remove port exposure - access through nginx
     ports: []
 
@@ -105,7 +125,7 @@ services:
     ports: []
 
   backup:
-    image: mongo:6
+    image: mongo:6.0
     container_name: status-backup-prod
     environment:
       MONGO_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/status_page?authSource=admin
@@ -124,6 +144,10 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+
+networks:
+  status-network:
+    driver: bridge
 
 volumes:
   mongo_prod_data:
