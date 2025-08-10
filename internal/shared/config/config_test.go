@@ -20,10 +20,11 @@ func TestConfig_New(t *testing.T) {
 			options: []Option{},
 			expected: &Config{
 				Server: ServerConfig{
-					Port:         "8080",
-					ReadTimeout:  15 * time.Second,
-					WriteTimeout: 15 * time.Second,
-					IdleTimeout:  60 * time.Second,
+					Port:              "8080",
+					ReadTimeout:       15 * time.Second,
+					ReadHeaderTimeout: 5 * time.Second,
+					WriteTimeout:      15 * time.Second,
+					IdleTimeout:       60 * time.Second,
 				},
 				Database: DatabaseConfig{
 					URI:     "mongodb://localhost:27017",
@@ -43,14 +44,15 @@ func TestConfig_New(t *testing.T) {
 			name: "custom server configuration",
 			options: []Option{
 				WithServerPort("9090"),
-				WithServerTimeouts(30*time.Second, 30*time.Second, 120*time.Second),
+				WithServerTimeouts(30*time.Second, 10*time.Second, 30*time.Second, 120*time.Second),
 			},
 			expected: &Config{
 				Server: ServerConfig{
-					Port:         "9090",
-					ReadTimeout:  30 * time.Second,
-					WriteTimeout: 30 * time.Second,
-					IdleTimeout:  120 * time.Second,
+					Port:              "9090",
+					ReadTimeout:       30 * time.Second,
+					ReadHeaderTimeout: 10 * time.Second,
+					WriteTimeout:      30 * time.Second,
+					IdleTimeout:       120 * time.Second,
 				},
 				Database: DatabaseConfig{
 					URI:     "mongodb://localhost:27017",
@@ -73,10 +75,11 @@ func TestConfig_New(t *testing.T) {
 			},
 			expected: &Config{
 				Server: ServerConfig{
-					Port:         "8080",
-					ReadTimeout:  15 * time.Second,
-					WriteTimeout: 15 * time.Second,
-					IdleTimeout:  60 * time.Second,
+					Port:              "8080",
+					ReadTimeout:       15 * time.Second,
+					ReadHeaderTimeout: 5 * time.Second,
+					WriteTimeout:      15 * time.Second,
+					IdleTimeout:       60 * time.Second,
 				},
 				Database: DatabaseConfig{
 					URI:     "mongodb://custom:27017",
@@ -99,10 +102,11 @@ func TestConfig_New(t *testing.T) {
 			},
 			expected: &Config{
 				Server: ServerConfig{
-					Port:         "8080",
-					ReadTimeout:  15 * time.Second,
-					WriteTimeout: 15 * time.Second,
-					IdleTimeout:  60 * time.Second,
+					Port:              "8080",
+					ReadTimeout:       15 * time.Second,
+					ReadHeaderTimeout: 5 * time.Second,
+					WriteTimeout:      15 * time.Second,
+					IdleTimeout:       60 * time.Second,
 				},
 				Database: DatabaseConfig{
 					URI:     "mongodb://localhost:27017",
@@ -125,10 +129,11 @@ func TestConfig_New(t *testing.T) {
 			},
 			expected: &Config{
 				Server: ServerConfig{
-					Port:         "8080",
-					ReadTimeout:  15 * time.Second,
-					WriteTimeout: 15 * time.Second,
-					IdleTimeout:  60 * time.Second,
+					Port:              "8080",
+					ReadTimeout:       15 * time.Second,
+					ReadHeaderTimeout: 5 * time.Second,
+					WriteTimeout:      15 * time.Second,
+					IdleTimeout:       60 * time.Second,
 				},
 				Database: DatabaseConfig{
 					URI:     "mongodb://localhost:27017",
@@ -154,10 +159,11 @@ func TestConfig_New(t *testing.T) {
 			},
 			expected: &Config{
 				Server: ServerConfig{
-					Port:         "9090",
-					ReadTimeout:  15 * time.Second,
-					WriteTimeout: 15 * time.Second,
-					IdleTimeout:  60 * time.Second,
+					Port:              "9090",
+					ReadTimeout:       15 * time.Second,
+					ReadHeaderTimeout: 5 * time.Second,
+					WriteTimeout:      15 * time.Second,
+					IdleTimeout:       60 * time.Second,
 				},
 				Database: DatabaseConfig{
 					URI:     "mongodb://custom:27017",
@@ -196,10 +202,11 @@ func TestConfig_FromEnvironment(t *testing.T) {
 			resetEnv: true,
 			expected: &Config{
 				Server: ServerConfig{
-					Port:         "8080",
-					ReadTimeout:  15 * time.Second,
-					WriteTimeout: 15 * time.Second,
-					IdleTimeout:  60 * time.Second,
+					Port:              "8080",
+					ReadTimeout:       15 * time.Second,
+					ReadHeaderTimeout: 5 * time.Second,
+					WriteTimeout:      15 * time.Second,
+					IdleTimeout:       60 * time.Second,
 				},
 				Database: DatabaseConfig{
 					URI:     "mongodb://localhost:27017",
@@ -231,10 +238,11 @@ func TestConfig_FromEnvironment(t *testing.T) {
 			},
 			expected: &Config{
 				Server: ServerConfig{
-					Port:         "9090",
-					ReadTimeout:  30 * time.Second,
-					WriteTimeout: 30 * time.Second,
-					IdleTimeout:  120 * time.Second,
+					Port:              "9090",
+					ReadTimeout:       30 * time.Second,
+					ReadHeaderTimeout: 5 * time.Second,
+					WriteTimeout:      30 * time.Second,
+					IdleTimeout:       120 * time.Second,
 				},
 				Database: DatabaseConfig{
 					URI:     "mongodb://custom:27017",
@@ -279,10 +287,20 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "valid configuration",
 			config: &Config{
-				Server: ServerConfig{Port: "8080"},
+				Server: ServerConfig{
+					Port:              "8080",
+					ReadTimeout:       15 * time.Second,
+					ReadHeaderTimeout: 5 * time.Second,
+					WriteTimeout:      15 * time.Second,
+					IdleTimeout:       60 * time.Second,
+				},
 				Database: DatabaseConfig{
-					URI:  "mongodb://localhost:27017",
-					Name: "statuspage",
+					URI:     "mongodb://localhost:27017",
+					Name:    "statuspage",
+					Timeout: 10 * time.Second,
+				},
+				Logging: LoggingConfig{
+					Level: "info",
 				},
 				Checker: CheckerConfig{Interval: 2 * time.Minute},
 			},

@@ -4,9 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/sukhera/uptime-monitor/internal/application/middleware"
@@ -24,11 +21,12 @@ type Server struct {
 func New(handler http.Handler, cfg *config.Config) *Server {
 	return &Server{
 		Server: &http.Server{
-			Addr:         ":" + cfg.Server.Port,
-			Handler:      handler,
-			ReadTimeout:  cfg.Server.ReadTimeout,
-			WriteTimeout: cfg.Server.WriteTimeout,
-			IdleTimeout:  cfg.Server.IdleTimeout,
+			Addr:              ":" + cfg.Server.Port,
+			Handler:           handler,
+			ReadTimeout:       cfg.Server.ReadTimeout,
+			ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout,
+			WriteTimeout:      cfg.Server.WriteTimeout,
+			IdleTimeout:       cfg.Server.IdleTimeout,
 		},
 		config: cfg,
 	}
@@ -36,8 +34,12 @@ func New(handler http.Handler, cfg *config.Config) *Server {
 
 // Start starts the server with graceful shutdown
 func (s *Server) Start() error {
+	return s.StartWithContext(context.Background())
+}
+
+// StartWithContext starts the server with context for graceful shutdown
+func (s *Server) StartWithContext(ctx context.Context) error {
 	log := logger.Get()
-	ctx := context.Background()
 	
 	// Create a channel to listen for errors coming from the listener
 	serverErrors := make(chan error, 1)
@@ -48,17 +50,16 @@ func (s *Server) Start() error {
 		serverErrors <- s.ListenAndServe()
 	}()
 
-	// Create a channel to listen for an interrupt or terminate signal from the OS
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
-
-	// Blocking select waiting for either a server error or a shutdown signal
+	// Blocking select waiting for either a server error or context cancellation
 	select {
 	case err := <-serverErrors:
+		if err == http.ErrServerClosed {
+			return nil
+		}
 		return fmt.Errorf("server error: %w", err)
 
-	case sig := <-shutdown:
-		log.Info(ctx, "Received signal, starting graceful shutdown", logger.Fields{"signal": sig.String()})
+	case <-ctx.Done():
+		log.Info(ctx, "Context cancelled, starting graceful shutdown", logger.Fields{"reason": ctx.Err().Error()})
 
 		// Give outstanding requests a deadline for completion
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

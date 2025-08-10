@@ -3,7 +3,9 @@ package checker
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/sukhera/uptime-monitor/internal/domain/service"
@@ -108,15 +110,48 @@ func (cmd *HTTPHealthCheckCommand) GetServiceName() string {
 	return cmd.service.Name
 }
 
-// HealthCheckInvoker manages health check commands
-type HealthCheckInvoker struct {
-	commands []HealthCheckCommand
+// WorkerPoolConfig holds configuration for the worker pool
+type WorkerPoolConfig struct {
+	WorkerCount        int           // Number of workers in the pool
+	MaxConcurrent      int           // Maximum concurrent checks per service
+	GlobalTimeout      time.Duration // Global timeout for all checks
+	PerProbeTimeout    time.Duration // Individual probe timeout
+	JitterMaxDuration  time.Duration // Maximum jitter to add
+	RetryAttempts      int           // Number of retry attempts
+	RetryBackoffFactor float64       // Backoff multiplier for retries
+	RetryInitialDelay  time.Duration // Initial retry delay
 }
 
-// NewHealthCheckInvoker creates a new health check invoker
+// DefaultWorkerPoolConfig returns default configuration
+func DefaultWorkerPoolConfig() WorkerPoolConfig {
+	return WorkerPoolConfig{
+		WorkerCount:        10,
+		MaxConcurrent:      5,
+		GlobalTimeout:      5 * time.Minute,
+		PerProbeTimeout:    30 * time.Second,
+		JitterMaxDuration:  time.Second,
+		RetryAttempts:      3,
+		RetryBackoffFactor: 2.0,
+		RetryInitialDelay:  500 * time.Millisecond,
+	}
+}
+
+// HealthCheckInvoker manages health check commands with bounded worker pool
+type HealthCheckInvoker struct {
+	commands []HealthCheckCommand
+	config   WorkerPoolConfig
+}
+
+// NewHealthCheckInvoker creates a new health check invoker with default config
 func NewHealthCheckInvoker() *HealthCheckInvoker {
+	return NewHealthCheckInvokerWithConfig(DefaultWorkerPoolConfig())
+}
+
+// NewHealthCheckInvokerWithConfig creates a new health check invoker with custom config
+func NewHealthCheckInvokerWithConfig(config WorkerPoolConfig) *HealthCheckInvoker {
 	return &HealthCheckInvoker{
 		commands: make([]HealthCheckCommand, 0),
+		config:   config,
 	}
 }
 
@@ -125,26 +160,137 @@ func (invoker *HealthCheckInvoker) AddCommand(command HealthCheckCommand) {
 	invoker.commands = append(invoker.commands, command)
 }
 
-// ExecuteAll executes all health check commands concurrently
+// ExecuteAll executes all health check commands using bounded worker pool
 func (invoker *HealthCheckInvoker) ExecuteAll(ctx context.Context) []service.StatusLog {
 	if len(invoker.commands) == 0 {
 		return []service.StatusLog{}
 	}
 
-	results := make(chan service.StatusLog, len(invoker.commands))
+	// Create context with global timeout
+	globalCtx, cancel := context.WithTimeout(ctx, invoker.config.GlobalTimeout)
+	defer cancel()
 
-	for _, command := range invoker.commands {
-		go func(cmd HealthCheckCommand) {
-			results <- cmd.Execute(ctx)
-		}(command)
+	return invoker.executeWithWorkerPool(globalCtx)
+}
+
+// executeWithWorkerPool implements bounded worker pool execution
+func (invoker *HealthCheckInvoker) executeWithWorkerPool(ctx context.Context) []service.StatusLog {
+	jobs := make(chan HealthCheckCommand, len(invoker.commands))
+	results := make(chan service.StatusLog, len(invoker.commands))
+	
+	// Create semaphore for per-service concurrency control
+	semaphore := make(chan struct{}, invoker.config.MaxConcurrent)
+
+	var wg sync.WaitGroup
+
+	// Start workers
+	for i := 0; i < invoker.config.WorkerCount; i++ {
+		wg.Add(1)
+		go invoker.worker(ctx, jobs, results, semaphore, &wg)
 	}
 
+	// Send jobs
+	go func() {
+		defer close(jobs)
+		for _, cmd := range invoker.commands {
+			select {
+			case jobs <- cmd:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Wait for all workers to finish
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results
 	var statusLogs []service.StatusLog
-	for i := 0; i < len(invoker.commands); i++ {
-		statusLogs = append(statusLogs, <-results)
+	for result := range results {
+		statusLogs = append(statusLogs, result)
 	}
 
 	return statusLogs
+}
+
+// worker processes health check commands with jitter, timeout, and retry logic
+func (invoker *HealthCheckInvoker) worker(ctx context.Context, jobs <-chan HealthCheckCommand, results chan<- service.StatusLog, semaphore chan struct{}, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for {
+		select {
+		case cmd, ok := <-jobs:
+			if !ok {
+				return
+			}
+
+			// Acquire semaphore for per-service concurrency control
+			select {
+			case semaphore <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+
+			// Add jitter before executing
+			if invoker.config.JitterMaxDuration > 0 {
+				jitter := time.Duration(rand.Int63n(int64(invoker.config.JitterMaxDuration)))
+				time.Sleep(jitter)
+			}
+
+			// Execute with per-probe timeout and retry logic
+			result := invoker.executeCommandWithRetry(ctx, cmd)
+			
+			// Release semaphore
+			<-semaphore
+
+			select {
+			case results <- result:
+			case <-ctx.Done():
+				return
+			}
+
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// executeCommandWithRetry executes a command with retry and backoff logic
+func (invoker *HealthCheckInvoker) executeCommandWithRetry(ctx context.Context, cmd HealthCheckCommand) service.StatusLog {
+	var lastResult service.StatusLog
+	delay := invoker.config.RetryInitialDelay
+
+	for attempt := 0; attempt < invoker.config.RetryAttempts; attempt++ {
+		// Create context with per-probe timeout
+		probeCtx, cancel := context.WithTimeout(ctx, invoker.config.PerProbeTimeout)
+		
+		// Execute command
+		result := cmd.Execute(probeCtx)
+		cancel()
+
+		// If successful or context cancelled, return immediately
+		if result.Status == statusOperational || ctx.Err() != nil {
+			return result
+		}
+
+		lastResult = result
+
+		// If not the last attempt, wait before retrying
+		if attempt < invoker.config.RetryAttempts-1 {
+			select {
+			case <-time.After(delay):
+				// Increase delay with backoff factor
+				delay = time.Duration(float64(delay) * invoker.config.RetryBackoffFactor)
+			case <-ctx.Done():
+				return lastResult
+			}
+		}
+	}
+
+	return lastResult
 }
 
 // ExecuteSequential executes all health check commands sequentially
