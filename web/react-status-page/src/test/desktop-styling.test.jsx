@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render } from '@testing-library/react'
 
 // Mock window.matchMedia for responsive testing
 const createMatchMedia = (width) => vi.fn().mockImplementation(query => {
