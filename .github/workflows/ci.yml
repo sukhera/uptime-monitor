@@ -13,7 +13,7 @@ permissions:
   
 env:
   GO_VERSION: '1.24'
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
   MONGO_URI: mongodb://localhost:27017/status_page_test
 
 jobs:
@@ -147,6 +147,33 @@ jobs:
       run: |
         cd web/react-status-page
         npm run lint
+
+    - name: Run frontend tests
+      run: |
+        cd web/react-status-page
+        npm test
+
+    - name: Run frontend tests with coverage
+      run: |
+        cd web/react-status-page
+        npm run test:coverage
+
+    - name: Upload frontend coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./web/react-status-page/coverage/lcov.info
+        flags: frontend
+        name: frontend-coverage
+        fail_ci_if_error: false
+
+    - name: Archive frontend test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: frontend-test-results
+        path: |
+          web/react-status-page/coverage/
+          web/react-status-page/test-results/
 
     - name: Build frontend
       run: |

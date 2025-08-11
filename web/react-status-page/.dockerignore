@@ -1,0 +1,51 @@
+# Dependencies
+node_modules
+
+# Testing
+coverage
+.vitest
+test-results
+**/*.test.js
+**/*.test.jsx
+**/*.test.ts
+**/*.test.tsx
+src/test
+
+# Development
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build artifacts
+dist
+.vite
+
+# IDE and OS
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs
+
+# Temporary
+tmp
+temp
+
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+docs
+
+# Misc
+*.tgz
+*.tar.gz

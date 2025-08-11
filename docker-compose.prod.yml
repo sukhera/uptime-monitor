@@ -114,13 +114,15 @@ services:
 
   web:
     build:
-      context: ./web
+      context: ./web/react-status-page
       dockerfile: Dockerfile
       args:
         VITE_API_URL: /api
         NODE_ENV: production
     container_name: status-web-prod
     restart: unless-stopped
+    networks:
+      - status-network
     # Remove port exposure - access through nginx
     ports: []
 

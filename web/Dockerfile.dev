@@ -1,16 +1,17 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY react-status-page/package*.json ./
 RUN npm ci
 
-# Install development tools
-RUN npm install -g @vitejs/plugin-react
+# Copy source code  
+COPY react-status-page/ .
 
-COPY . .
+# Create node_modules cache mount point
+VOLUME ["/app/node_modules"]
 
-EXPOSE 3000
+EXPOSE 5173
 
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

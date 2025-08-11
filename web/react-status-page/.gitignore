@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Testing
+coverage/
+coverage.lcov
+.vitest/
+test-results/
+.nyc_output
+__coverage__/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -22,3 +30,22 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Temporary files
+tmp/
+temp/
+
+# Vite cache
+.vite/
+
+# Package manager cache
+.pnpm-store/
+.yarn/
+.npm/
