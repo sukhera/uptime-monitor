@@ -137,6 +137,11 @@ lint-results/
 coverage.html
 coverage.out
 
+# Frontend testing artifacts
+web/react-status-page/coverage/
+web/react-status-page/.vitest/
+web/react-status-page/test-results/
+
 # Generated mocks
 mocks/
 

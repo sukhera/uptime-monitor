@@ -64,21 +64,17 @@ services:
 
   web:
     build:
-      context: ./web/react-status-page
-      dockerfile: ../Dockerfile.dev
-      args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost/api}
-        NODE_ENV: development
+      context: ./web
+      dockerfile: Dockerfile.dev
     container_name: status-web-dev
     volumes:
-      - ./web:/app
+      - ./web/react-status-page:/app
       - /app/node_modules
     environment:
       NODE_ENV: development
-      VITE_API_URL: ${VITE_API_URL:-http://localhost/api}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api}
     ports:
-      - "3000:3000"
-    command: npm run dev -- --host 0.0.0.0
+      - "5173:5173"
     networks:
       - status-network
 
