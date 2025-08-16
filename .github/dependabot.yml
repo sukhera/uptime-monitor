@@ -9,8 +9,6 @@ updates:
       timezone: "Etc/UTC"
     assignees:
       - "sukhera"
-    reviewers:
-      - "sukhera"
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
@@ -23,14 +21,10 @@ updates:
       separator: "/"
     rebase-strategy: "auto"
     target-branch: "main"
-    # Group minor and patch updates
-    groups:
-      go-minor-patch:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
+    # Only update on security vulnerabilities
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-minor", "version-update:semver-patch"]
 
   # Node.js dependencies for React frontend
   - package-ecosystem: "npm"
@@ -41,8 +35,6 @@ updates:
       time: "06:00"
       timezone: "Etc/UTC"
     assignees:
-      - "sukhera"
-    reviewers:
       - "sukhera"
     commit-message:
       prefix: "chore(deps)"
@@ -64,27 +56,8 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "react-dom"
         update-types: ["version-update:semver-major"]
-    # Group development dependencies
-    groups:
-      dev-dependencies:
-        dependency-type: "development"
-        patterns:
-          - "@types/*"
-          - "@vitejs/*"
-          - "eslint*"
-          - "vite"
-          - "tailwindcss"
-          - "postcss"
-          - "autoprefixer"
-        update-types:
-          - "minor"
-          - "patch"
-      production-dependencies:
-        dependency-type: "production"
-        patterns:
-          - "*"
-        update-types:
-          - "patch"
+      - dependency-name: "*"
+        update-types: ["version-update:semver-minor", "version-update:semver-patch"]
 
   # Docker base images
   - package-ecosystem: "docker"
@@ -95,8 +68,6 @@ updates:
       time: "06:00"
       timezone: "Etc/UTC"
     assignees:
-      - "sukhera"
-    reviewers:
       - "sukhera"
     commit-message:
       prefix: "chore(docker)"
@@ -111,6 +82,10 @@ updates:
       separator: "/"
     rebase-strategy: "auto"
     target-branch: "main"
+    # Only update on security vulnerabilities
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-minor", "version-update:semver-patch"]
 
   # Docker for React frontend
   - package-ecosystem: "docker"
@@ -121,8 +96,6 @@ updates:
       time: "06:00"
       timezone: "Etc/UTC"
     assignees:
-      - "sukhera"
-    reviewers:
       - "sukhera"
     commit-message:
       prefix: "chore(docker)"
@@ -137,6 +110,10 @@ updates:
       separator: "/"
     rebase-strategy: "auto"
     target-branch: "main"
+    # Only update on security vulnerabilities
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-minor", "version-update:semver-patch"]
 
   # GitHub Actions Configuration
   - package-ecosystem: "github-actions"
@@ -147,8 +124,6 @@ updates:
       time: "06:00"
       timezone: "Etc/UTC"
     assignees:
-      - "sukhera"
-    reviewers:
       - "sukhera"
     commit-message:
       prefix: "chore(ci)"
@@ -163,11 +138,7 @@ updates:
       separator: "/"
     rebase-strategy: "auto"
     target-branch: "main"
-    # Group GitHub Actions updates
-    groups:
-      github-actions:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
+    # Only update on security vulnerabilities
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-minor", "version-update:semver-patch"]
