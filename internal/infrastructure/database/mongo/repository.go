@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"time"
 
 	"github.com/sukhera/uptime-monitor/internal/domain/service"
 	"github.com/sukhera/uptime-monitor/internal/shared/errors"
@@ -237,4 +238,130 @@ func (r *ServiceRepository) GetStatusHistory(ctx context.Context, serviceName st
 	}
 
 	return statusLogs, nil
+}
+
+// FindByType retrieves services by their type
+func (r *ServiceRepository) FindByType(ctx context.Context, serviceType service.ServiceType) ([]*service.Service, error) {
+	if r.db == nil {
+		return nil, errors.New("database connection is nil", errors.ErrorKindInternal)
+	}
+
+	filter := bson.M{"service_type": serviceType}
+	cursor, err := r.db.ServicesCollection().Find(ctx, filter)
+	if err != nil {
+		return nil, errors.NewWithCause("failed to find services by type", errors.ErrorKindInternal, err)
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log := logger.Get()
+			log.Error(ctx, "Error closing cursor", err, nil)
+		}
+	}()
+
+	var services []*service.Service
+	if err = cursor.All(ctx, &services); err != nil {
+		return nil, errors.NewWithCause("failed to decode services", errors.ErrorKindInternal, err)
+	}
+
+	return services, nil
+}
+
+// BulkCreate creates multiple services in a single operation
+func (r *ServiceRepository) BulkCreate(ctx context.Context, services []*service.Service) error {
+	if len(services) == 0 {
+		return errors.NewValidationError("no services provided for bulk create")
+	}
+
+	// Validate all services first
+	for i, svc := range services {
+		if err := svc.Validate(); err != nil {
+			return errors.NewWithCause("invalid service at index "+string(rune(i)), errors.ErrorKindValidation, err)
+		}
+	}
+
+	if r.db == nil {
+		return errors.New("database connection is nil", errors.ErrorKindInternal)
+	}
+
+	// Convert to interface slice for InsertMany
+	docs := make([]interface{}, len(services))
+	for i, svc := range services {
+		docs[i] = svc
+	}
+
+	// Insert all services
+	_, err := r.db.ServicesCollection().InsertMany(ctx, docs)
+	if err != nil {
+		return errors.NewWithCause("failed to bulk create services", errors.ErrorKindInternal, err)
+	}
+
+	return nil
+}
+
+// SetManualStatus sets a manual status override for a service
+func (r *ServiceRepository) SetManualStatus(ctx context.Context, serviceID string, override *service.ManualStatusOverride) error {
+	if override == nil {
+		return errors.NewValidationError("manual status override cannot be nil")
+	}
+
+	if r.db == nil {
+		return errors.New("database connection is nil", errors.ErrorKindInternal)
+	}
+
+	// Try to parse as ObjectID first, then fall back to slug
+	var filter bson.M
+	if objectID, err := primitive.ObjectIDFromHex(serviceID); err == nil {
+		filter = bson.M{"_id": objectID}
+	} else {
+		filter = bson.M{"slug": serviceID}
+	}
+
+	update := bson.M{
+		"$set": bson.M{
+			"manual_status": override,
+			"updated_at":    primitive.NewDateTimeFromTime(override.SetAt),
+		},
+	}
+
+	result, err := r.db.ServicesCollection().UpdateOne(ctx, filter, update)
+	if err != nil {
+		return errors.NewWithCause("failed to set manual status", errors.ErrorKindInternal, err)
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.NewNotFoundError("service not found")
+	}
+
+	return nil
+}
+
+// ClearManualStatus removes the manual status override for a service
+func (r *ServiceRepository) ClearManualStatus(ctx context.Context, serviceID string) error {
+	if r.db == nil {
+		return errors.New("database connection is nil", errors.ErrorKindInternal)
+	}
+
+	// Try to parse as ObjectID first, then fall back to slug
+	var filter bson.M
+	if objectID, err := primitive.ObjectIDFromHex(serviceID); err == nil {
+		filter = bson.M{"_id": objectID}
+	} else {
+		filter = bson.M{"slug": serviceID}
+	}
+
+	update := bson.M{
+		"$unset": bson.M{"manual_status": ""},
+		"$set":   bson.M{"updated_at": primitive.NewDateTimeFromTime(time.Now().UTC())},
+	}
+
+	result, err := r.db.ServicesCollection().UpdateOne(ctx, filter, update)
+	if err != nil {
+		return errors.NewWithCause("failed to clear manual status", errors.ErrorKindInternal, err)
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.NewNotFoundError("service not found")
+	}
+
+	return nil
 }

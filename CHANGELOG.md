@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Integration Backend Foundation (Week 1)**
+  - **Enhanced Service Entity** with webhook support, manual status overrides, and service type categorization
+  - **WebhookHandler** with HMAC-SHA256 signature validation for secure external status updates
+  - **IntegrationHandler** for manual status management, bulk operations, and API documentation
+  - **Enhanced MongoDB Repository** with integration-specific methods (FindByType, BulkCreate, SetManualStatus)
+  - **Comprehensive Test Suite** with 150+ new tests using table-driven patterns and Mockery
+  - **New Service Types**: HTTP, TCP, DNS, Webhook with proper validation and URL requirements
+  - **API Routes**: `/api/v1/webhook/{service-slug}`, `/api/v1/integration/services/*`, bulk import endpoint
 - **Desktop Foundation Transformation**
   - **Enhanced Tailwind Configuration**
     - Removed mobile breakpoints (sm: 640px, md: 768px) for desktop-first approach

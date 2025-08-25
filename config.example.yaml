@@ -11,7 +11,7 @@ server:
 # Database configuration
 database:
   url: "mongodb://localhost:27017"
-  name: "statuspage"
+  name: "status_page"
   timeout: "10s"
 
 # Logging configuration

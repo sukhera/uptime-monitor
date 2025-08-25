@@ -26,6 +26,7 @@ packages:
       outpkg: "service"
     interfaces:
       Repository:
+      StatusLogRepository:
   
   github.com/sukhera/uptime-monitor/internal/checker:
     config:

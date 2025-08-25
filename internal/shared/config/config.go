@@ -98,7 +98,7 @@ func FromEnvironment() Option {
 		c.Server.IdleTimeout = getDurationEnv("IDLE_TIMEOUT", 60*time.Second)
 
 		c.Database.URI = getEnv("MONGO_URI", "mongodb://localhost:27017")
-		c.Database.Name = getEnv("DB_NAME", "statuspage")
+		c.Database.Name = getEnv("DB_NAME", "status_page")
 		c.Database.Timeout = getDurationEnv("DB_TIMEOUT", 10*time.Second)
 
 		c.Logging.Level = getEnv("LOG_LEVEL", "info")
@@ -120,7 +120,7 @@ func New(options ...Option) *Config {
 		},
 		Database: DatabaseConfig{
 			URI:     "mongodb://localhost:27017",
-			Name:    "statuspage",
+			Name:    "status_page",
 			Timeout: 10 * time.Second,
 		},
 		Logging: LoggingConfig{
@@ -148,10 +148,10 @@ func Load() *Config {
 func LoadFromViper() *Config {
 	// Set viper defaults first
 	setViperDefaults()
-	
+
 	// Enable reading from environment variables
 	viper.AutomaticEnv()
-	
+
 	// Bind specific environment variables to viper keys
 	_ = viper.BindEnv("database.url", "MONGO_URI")
 	_ = viper.BindEnv("server.port", "PORT")
@@ -194,7 +194,7 @@ func setViperDefaults() {
 
 	// Database defaults
 	viper.SetDefault("database.url", "mongodb://localhost:27017")
-	viper.SetDefault("database.name", "statuspage")
+	viper.SetDefault("database.name", "status_page")
 	viper.SetDefault("database.timeout", "10s")
 
 	// Logging defaults

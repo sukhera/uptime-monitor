@@ -354,13 +354,13 @@ func TestHealthCheckInvoker_ConcurrentExecution(t *testing.T) {
 	// Track concurrent requests to verify they happen simultaneously
 	var mu sync.Mutex
 	requestTimes := make([]time.Time, 0)
-	
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Record when this request started
 		mu.Lock()
 		requestTimes = append(requestTimes, time.Now())
 		mu.Unlock()
-		
+
 		// Simulate some processing time
 		time.Sleep(50 * time.Millisecond)
 		w.WriteHeader(200)
@@ -394,26 +394,26 @@ func TestHealthCheckInvoker_ConcurrentExecution(t *testing.T) {
 
 	// Test that we got all results
 	assert.Len(t, results, numServices)
-	
+
 	// Test that all results are successful
 	for _, result := range results {
 		assert.Equal(t, "operational", result.Status)
 	}
-	
+
 	// Test concurrency by checking that requests started close together
 	mu.Lock()
 	times := make([]time.Time, len(requestTimes))
 	copy(times, requestTimes)
 	mu.Unlock()
-	
+
 	assert.Len(t, times, numServices, "Expected %d concurrent requests", numServices)
-	
+
 	if len(times) >= 2 {
 		// Find the time span between first and last request start
 		var earliest, latest time.Time
 		earliest = times[0]
 		latest = times[0]
-		
+
 		for _, t := range times {
 			if t.Before(earliest) {
 				earliest = t
@@ -422,14 +422,14 @@ func TestHealthCheckInvoker_ConcurrentExecution(t *testing.T) {
 				latest = t
 			}
 		}
-		
+
 		// If requests are truly concurrent, they should start within a small time window
 		// Allow more generous time for race detection overhead
 		maxStartSpread := 500 * time.Millisecond // Increased for race detection
 		actualSpread := latest.Sub(earliest)
-		
+
 		assert.True(t, actualSpread < maxStartSpread,
-			"Requests should start concurrently. Time spread: %v (max allowed: %v)", 
+			"Requests should start concurrently. Time spread: %v (max allowed: %v)",
 			actualSpread, maxStartSpread)
 	}
 }

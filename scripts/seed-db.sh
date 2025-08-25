@@ -7,7 +7,7 @@ MONGO_URI=${MONGO_URI:-"mongodb://localhost:27017/status_page"}
 
 echo "Seeding database with sample data..."
 
-mongosh "$MONGO_URI" << 'EOF'
+docker-compose exec -T mongo mongosh "$MONGO_URI" << 'EOF'
 use status_page;
 
 // Clear existing data
