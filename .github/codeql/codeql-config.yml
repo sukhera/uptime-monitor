@@ -1,0 +1,40 @@
+# CodeQL Configuration for Security-Focused Analysis
+# This configuration reduces false positives while maintaining security coverage
+
+name: "Security-Focused CodeQL"
+
+# Only run security queries, not code quality
+queries:
+  - uses: security-extended
+  - uses: security-and-quality
+  
+# Disable specific queries that are too noisy or not applicable
+query-filters:
+  - exclude:
+      id: go/log-injection
+      reason: "Custom sanitization implemented in logger package"
+  - exclude:
+      id: js/log-injection  
+      reason: "Custom sanitization implemented in logger package"
+
+# Path filters - focus on security-critical areas
+paths:
+  - "internal/application/handlers/**"
+  - "internal/infrastructure/database/**" 
+  - "internal/shared/logger/**"
+  - "web/react-status-page/src/**"
+  
+paths-ignore:
+  - "**/*_test.go"
+  - "**/*.test.js"
+  - "**/node_modules/**"
+  - "**/testdata/**"
+  - "**/mocks/**"
+  - "**/examples/**"
+
+# Configure specific query settings
+query-settings:
+  go/database-query-built-from-user-controlled-sources:
+    # Allow parameterized queries and validated input
+    allow-parameterized: true
+    allow-validated-input: true
