@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"regexp"
 	"time"
 
 	"github.com/sukhera/uptime-monitor/internal/domain/service"
@@ -16,6 +17,17 @@ import (
 // ServiceRepository implements the service repository interface for MongoDB
 type ServiceRepository struct {
 	db Interface
+}
+
+// isValidSlug validates that a slug contains only safe characters
+// Prevents NoSQL injection by ensuring only alphanumeric, dash, and underscore characters
+func isValidSlug(slug string) bool {
+	if slug == "" {
+		return false
+	}
+	// Allow only alphanumeric characters, hyphens, and underscores
+	validSlugPattern := regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+	return validSlugPattern.MatchString(slug)
 }
 
 // NewServiceRepository creates a new service repository
@@ -64,6 +76,11 @@ func (r *ServiceRepository) GetByID(ctx context.Context, id string) (*service.Se
 
 // GetBySlug retrieves a service by slug
 func (r *ServiceRepository) GetBySlug(ctx context.Context, slug string) (*service.Service, error) {
+	// Validate slug format to prevent NoSQL injection
+	if !isValidSlug(slug) {
+		return nil, errors.NewValidationError("invalid slug format: only alphanumeric characters, hyphens, and underscores are allowed")
+	}
+	
 	filter := bson.M{"slug": slug}
 	var svc service.Service
 	err := r.db.ServicesCollection().FindOne(ctx, filter).Decode(&svc)
@@ -313,6 +330,10 @@ func (r *ServiceRepository) SetManualStatus(ctx context.Context, serviceID strin
 	if objectID, err := primitive.ObjectIDFromHex(serviceID); err == nil {
 		filter = bson.M{"_id": objectID}
 	} else {
+		// Validate slug format to prevent NoSQL injection
+		if !isValidSlug(serviceID) {
+			return errors.NewValidationError("invalid service identifier format: only alphanumeric characters, hyphens, and underscores are allowed for slugs")
+		}
 		filter = bson.M{"slug": serviceID}
 	}
 
@@ -346,6 +367,10 @@ func (r *ServiceRepository) ClearManualStatus(ctx context.Context, serviceID str
 	if objectID, err := primitive.ObjectIDFromHex(serviceID); err == nil {
 		filter = bson.M{"_id": objectID}
 	} else {
+		// Validate slug format to prevent NoSQL injection
+		if !isValidSlug(serviceID) {
+			return errors.NewValidationError("invalid service identifier format: only alphanumeric characters, hyphens, and underscores are allowed for slugs")
+		}
 		filter = bson.M{"slug": serviceID}
 	}
 

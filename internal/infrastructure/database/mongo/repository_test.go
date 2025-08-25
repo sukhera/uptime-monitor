@@ -1,6 +1,7 @@
 package mongo
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -211,6 +212,92 @@ func TestService_Integration(t *testing.T) {
 	assert.GreaterOrEqual(t, statusLog.Latency, int64(0))
 }
 
+func TestIsValidSlug(t *testing.T) {
+	tests := []struct {
+		name     string
+		slug     string
+		expected bool
+	}{
+		{
+			name:     "valid slug with letters",
+			slug:     "my-service",
+			expected: true,
+		},
+		{
+			name:     "valid slug with numbers",
+			slug:     "service-123",
+			expected: true,
+		},
+		{
+			name:     "valid slug with underscores",
+			slug:     "my_service",
+			expected: true,
+		},
+		{
+			name:     "valid slug mixed",
+			slug:     "my-service_123",
+			expected: true,
+		},
+		{
+			name:     "invalid slug with spaces",
+			slug:     "my service",
+			expected: false,
+		},
+		{
+			name:     "invalid slug with special characters",
+			slug:     "my@service",
+			expected: false,
+		},
+		{
+			name:     "invalid slug with dots",
+			slug:     "my.service",
+			expected: false,
+		},
+		{
+			name:     "invalid slug with forward slashes",
+			slug:     "my/service",
+			expected: false,
+		},
+		{
+			name:     "invalid slug with newlines",
+			slug:     "my\nservice",
+			expected: false,
+		},
+		{
+			name:     "invalid slug with carriage returns",
+			slug:     "my\rservice",
+			expected: false,
+		},
+		{
+			name:     "invalid empty slug",
+			slug:     "",
+			expected: false,
+		},
+		{
+			name:     "valid single character",
+			slug:     "a",
+			expected: true,
+		},
+		{
+			name:     "valid single number",
+			slug:     "1",
+			expected: true,
+		},
+		{
+			name:     "invalid slug with brackets",
+			slug:     "service[1]",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isValidSlug(tt.slug)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func TestErrorHandling(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -258,6 +345,32 @@ func TestErrorHandling(t *testing.T) {
 			if assert.ErrorAs(t, err, &domainErr) {
 				assert.Equal(t, tt.errorType, domainErr.Kind())
 			}
+		})
+	}
+}
+
+func TestServiceRepository_SlugValidation(t *testing.T) {
+	// Test slug validation in repository methods without requiring actual DB
+	repo := &ServiceRepository{db: nil}
+	
+	// Test GetBySlug with invalid slugs
+	invalidSlugs := []struct {
+		name string
+		slug string
+	}{
+		{"empty slug", ""},
+		{"slug with spaces", "my service"},
+		{"slug with special chars", "my@service"},
+		{"slug with newlines", "my\nservice"},
+		{"slug with dots", "my.service"},
+		{"slug with slashes", "my/service"},
+	}
+	
+	for _, tt := range invalidSlugs {
+		t.Run("GetBySlug_"+tt.name, func(t *testing.T) {
+			_, err := repo.GetBySlug(context.Background(), tt.slug)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "invalid slug format")
 		})
 	}
 }

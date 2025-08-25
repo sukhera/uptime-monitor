@@ -111,11 +111,17 @@ func (h *IntegrationHandler) SetManualStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Sanitize user-controlled input for logging to prevent log injection
+	safeServiceID := strings.ReplaceAll(strings.ReplaceAll(serviceID, "\n", ""), "\r", "")
+	safeStatus := strings.ReplaceAll(strings.ReplaceAll(request.Status, "\n", ""), "\r", "")
+	safeReason := strings.ReplaceAll(strings.ReplaceAll(request.Reason, "\n", ""), "\r", "")
+	safeUserID := strings.ReplaceAll(strings.ReplaceAll(userID, "\n", ""), "\r", "")
+	
 	h.logger.Info(ctx, "Manual status set", logger.Fields{
-		"service_id": serviceID,
-		"status":     request.Status,
-		"reason":     request.Reason,
-		"user":       userID,
+		"service_id": safeServiceID,
+		"status":     safeStatus,
+		"reason":     safeReason,
+		"user":       safeUserID,
 	})
 
 	// Return success response
@@ -162,9 +168,14 @@ func (h *IntegrationHandler) ClearManualStatus(w http.ResponseWriter, r *http.Re
 	}
 
 	userID := h.getCurrentUser(r)
+	
+	// Sanitize user-controlled input for logging to prevent log injection
+	safeServiceID := strings.ReplaceAll(strings.ReplaceAll(serviceID, "\n", ""), "\r", "")
+	safeUserID := strings.ReplaceAll(strings.ReplaceAll(userID, "\n", ""), "\r", "")
+	
 	h.logger.Info(ctx, "Manual status cleared", logger.Fields{
-		"service_id": serviceID,
-		"user":       userID,
+		"service_id": safeServiceID,
+		"user":       safeUserID,
 	})
 
 	// Return success response
