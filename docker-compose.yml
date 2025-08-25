@@ -33,6 +33,11 @@ services:
     networks:
       - status-network
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: false  # Set to true if app doesn't need to write files
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
       interval: 30s
@@ -54,10 +59,17 @@ services:
       MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017/status_page}
       PORT: ${PORT:-8080}
       GO_ENV: ${GO_ENV:-production}
-      JWT_SECRET: ${JWT_SECRET:-default_jwt_secret_change_in_production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET environment variable is required}
     networks:
       - status-network
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: false  # Set to true if app doesn't need to write files
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 30s
@@ -80,6 +92,13 @@ services:
     networks:
       - status-network
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s

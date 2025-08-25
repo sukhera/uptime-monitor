@@ -11,6 +11,9 @@
 ### Related Issues
 <!-- Link to any related issues using "Fixes #123" or "Closes #123" -->
 
+### Dependencies
+<!-- List any new dependencies added and explain why they are needed -->
+
 ## 🔄 Type of Change
 
 - [ ] 🐛 Bug fix (non-breaking change which fixes an issue)
@@ -26,6 +29,7 @@
 ## 🧪 Testing
 
 ### Testing Performed
+
 - [ ] Unit tests pass
 - [ ] Integration tests pass
 - [ ] Manual testing completed
@@ -35,6 +39,7 @@
 <!-- Describe what areas were tested and how -->
 
 ### Commands Run
+
 ```bash
 # List the commands you ran to test your changes
 make test
@@ -45,6 +50,7 @@ make build
 ## 📋 Checklist
 
 ### Code Quality
+
 - [ ] My code follows the project's style guidelines
 - [ ] I have performed a self-review of my code
 - [ ] I have commented my code, particularly in hard-to-understand areas
@@ -52,20 +58,23 @@ make build
 - [ ] Any dependent changes have been merged and published
 
 ### Testing
+
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] New and existing unit tests pass locally with my changes
 - [ ] I have tested the changes in a local development environment
 
 ### Documentation
+
 - [ ] I have made corresponding changes to the documentation
 - [ ] I have updated the API documentation (if applicable)
 - [ ] I have updated the README.md (if applicable)
 - [ ] I have added/updated configuration examples (if applicable)
 
 ### Breaking Changes
-- [ ] This change requires a documentation update
-- [ ] This change requires database migrations
-- [ ] This change affects the API contract
+
+- [ ] This change introduces a breaking change to the API contract (Yes/No)
+- [ ] This change requires modifications to the database schema (Yes/No)
+- [ ] This change requires a documentation update (Yes/No)
 - [ ] I have provided migration instructions (if applicable)
 
 ## 🖼️ Screenshots (if applicable)
@@ -87,10 +96,15 @@ make build
 ### Infrastructure Changes
 <!-- Describe any infrastructure or deployment changes needed -->
 
+## 🔒 Security Considerations
+
+<!-- Describe any security implications of your changes and how they have been addressed. -->
+
 ## 👥 Reviewers
 
 ### Required Reviewers
-- @sukhera
+
+<!-- @mention required reviewers. Consider using a CODEOWNERS file for automation. -->
 
 ### Optional Reviewers
 <!-- Tag any additional reviewers who might be interested -->
@@ -106,6 +120,7 @@ make build
 ---
 
 **By submitting this pull request, I confirm that:**
+
 - [ ] I have read and followed the project's contributing guidelines
 - [ ] I understand that this contribution will be licensed under the project's license
 - [ ] I have tested my changes thoroughly

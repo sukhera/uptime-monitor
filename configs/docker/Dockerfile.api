@@ -14,8 +14,21 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
     -o api ./cmd/api
 
 FROM debian:bullseye-slim
+
+# Create a non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Install ca-certificates and clean up
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
+
+# Copy binary and set ownership
 COPY --from=builder /app/api .
+RUN chmod +x ./api && chown appuser:appuser ./api
+
+# Switch to non-root user
+USER appuser
+
 EXPOSE 8080
 CMD ["./api"]

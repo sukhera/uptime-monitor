@@ -66,8 +66,52 @@ func CreateTestService() *service.Service {
 		Headers:        map[string]string{"User-Agent": "TestAgent"},
 		ExpectedStatus: 200,
 		Enabled:        true,
+		ServiceType:    service.ServiceTypeHTTP,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
+	}
+}
+
+// CreateTestWebhookService creates a test webhook service
+func CreateTestWebhookService() *service.Service {
+	return &service.Service{
+		Name:          "Test Webhook Service",
+		Slug:          "test-webhook-service",
+		Enabled:       true,
+		ServiceType:   service.ServiceTypeWebhook,
+		WebhookURL:    "http://localhost:8080/api/v1/webhook/test-webhook-service",
+		WebhookSecret: "test-webhook-secret",
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+}
+
+// CreateTestManualStatusOverride creates a test manual status override
+func CreateTestManualStatusOverride() *service.ManualStatusOverride {
+	now := time.Now().UTC()
+	future := now.Add(1 * time.Hour)
+	return &service.ManualStatusOverride{
+		Status:    "maintenance",
+		Reason:    "Scheduled maintenance window",
+		SetBy:     "test-user@example.com",
+		SetAt:     now,
+		ExpiresAt: &future,
+	}
+}
+
+// CreateTestWebhookPayload creates a test webhook payload
+func CreateTestWebhookPayload() *service.WebhookPayload {
+	now := time.Now().UTC()
+	latency := int64(150)
+	return &service.WebhookPayload{
+		Status:    "operational",
+		Latency:   &latency,
+		Message:   "All systems operational",
+		Timestamp: &now,
+		Metadata: map[string]interface{}{
+			"region":  "us-west-1",
+			"version": "1.0.0",
+		},
 	}
 }
 

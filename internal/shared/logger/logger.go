@@ -2,8 +2,10 @@ package logger
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -201,23 +203,31 @@ func (l *ZapLogger) logWithLevel(ctx context.Context, level zapcore.Level, messa
 	// Add level field
 	zapFields = append(zapFields, zap.String("level", level.String()))
 
-	// Add all fields
+	// Add all fields with sanitization
 	for k, v := range fields {
+		// Sanitize field key
+		sanitizedKey := sanitizeLogString(k)
+		if len(sanitizedKey) > 100 {
+			continue // Skip keys that are too long after sanitization
+		}
+		
 		switch val := v.(type) {
 		case string:
-			zapFields = append(zapFields, zap.String(k, sanitizeLogString(val)))
+			zapFields = append(zapFields, zap.String(sanitizedKey, sanitizeLogString(val)))
 		case int:
-			zapFields = append(zapFields, zap.Int(k, val))
+			zapFields = append(zapFields, zap.Int(sanitizedKey, val))
 		case int64:
-			zapFields = append(zapFields, zap.Int64(k, val))
+			zapFields = append(zapFields, zap.Int64(sanitizedKey, val))
 		case float64:
-			zapFields = append(zapFields, zap.Float64(k, val))
+			zapFields = append(zapFields, zap.Float64(sanitizedKey, val))
 		case bool:
-			zapFields = append(zapFields, zap.Bool(k, val))
+			zapFields = append(zapFields, zap.Bool(sanitizedKey, val))
 		case error:
-			zapFields = append(zapFields, zap.Error(val))
+			// Sanitize error messages to prevent injection
+			zapFields = append(zapFields, zap.String(sanitizedKey+"_error", sanitizeLogString(val.Error())))
 		default:
-			zapFields = append(zapFields, zap.Any(k, val))
+			// For complex types, convert to string and sanitize
+			zapFields = append(zapFields, zap.String(sanitizedKey, sanitizeLogString(formatComplexValue(val))))
 		}
 	}
 
@@ -249,9 +259,53 @@ func (l *ZapLogger) logWithLevel(ctx context.Context, level zapcore.Level, messa
 	}
 }
 
-// sanitizeLogString removes newline and carriage return characters to prevent log injection
+// sanitizeLogString removes dangerous characters to prevent log injection attacks
 func sanitizeLogString(s string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(s, "\n", ""), "\r", "")
+	if !utf8.ValidString(s) {
+		// Replace invalid UTF-8 with replacement character
+		s = strings.ToValidUTF8(s, "�")
+	}
+
+	// Remove null bytes, newlines, carriage returns, tabs, and other control characters
+	s = strings.ReplaceAll(s, "\x00", "")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "\t", " ")
+	
+	// Remove other dangerous control characters (0x01-0x1F except space)
+	var result strings.Builder
+	for _, r := range s {
+		if r >= 0x20 || r == ' ' {
+			result.WriteRune(r)
+		} else {
+			result.WriteString(" ")
+		}
+	}
+
+	// Truncate if too long to prevent log flooding
+	output := result.String()
+	const maxLogLength = 2000
+	if len(output) > maxLogLength {
+		output = output[:maxLogLength] + "...[truncated]"
+	}
+
+	return output
+}
+
+// formatComplexValue safely formats complex values to string
+func formatComplexValue(v interface{}) string {
+	if v == nil {
+		return "<nil>"
+	}
+	
+	// Use fmt.Sprintf but limit the output length to prevent log flooding
+	formatted := fmt.Sprintf("%+v", v)
+	const maxComplexValueLength = 500
+	if len(formatted) > maxComplexValueLength {
+		formatted = formatted[:maxComplexValueLength] + "...[truncated]"
+	}
+	
+	return formatted
 }
 
 // getContextValue safely extracts a value from context

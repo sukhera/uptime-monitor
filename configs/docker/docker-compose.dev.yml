@@ -19,7 +19,7 @@ services:
       - mongo
     environment:
       - MONGO_URI=mongodb://mongo:27017
-      - DB_NAME=statuspage_dev
+      - DB_NAME=status_page
     restart: always
 
   api:
@@ -31,7 +31,7 @@ services:
       - mongo
     environment:
       - MONGO_URI=mongodb://mongo:27017
-      - DB_NAME=statuspage_dev
+      - DB_NAME=status_page
       - PORT=8080
     ports:
       - "8080:8080"

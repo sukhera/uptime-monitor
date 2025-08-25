@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/sukhera/uptime-monitor/internal/domain/service"
+	"github.com/sukhera/uptime-monitor/internal/shared/errors"
 	"github.com/sukhera/uptime-monitor/internal/shared/logger"
 )
 
@@ -85,4 +87,45 @@ func (h *BaseHandler) WriteJSON(w http.ResponseWriter, data interface{}, errorMe
 func (h *BaseHandler) WriteJSONWithHeaders(w http.ResponseWriter, data interface{}, errorMessage string, headerSetter func(http.ResponseWriter)) {
 	headerSetter(w)
 	h.WriteJSON(w, data, errorMessage)
+}
+
+// HandleRepositoryError handles repository errors using proper error type checking
+// Returns true if error was handled, false if caller should handle it
+func (h *BaseHandler) HandleRepositoryError(w http.ResponseWriter, err error, operation string) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check for specific service errors first
+	if err == service.ErrServiceNotFound {
+		h.WriteNotFoundError(w, "Service not found", err)
+		return true
+	}
+
+	// Check for repository implementation errors
+	if err == service.ErrRepositoryNotImplemented ||
+		err == service.ErrManualStatusNotImplemented ||
+		err == service.ErrManualStatusClearNotImplemented {
+		h.WriteInternalServerError(w, err.Error(), err)
+		return true
+	}
+
+	// Check for error types using the error system
+	if errors.IsNotFound(err) {
+		h.WriteNotFoundError(w, "Service not found", err)
+		return true
+	}
+
+	if errors.IsValidation(err) {
+		h.WriteBadRequestError(w, err.Error(), err)
+		return true
+	}
+
+	if errors.IsInternal(err) {
+		h.WriteInternalServerError(w, "Failed to "+operation, err)
+		return true
+	}
+
+	// Not handled, caller should handle
+	return false
 }

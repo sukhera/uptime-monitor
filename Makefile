@@ -218,7 +218,7 @@ security: ## Run security scans
 
 security-go: ## Run Go security scan
 	@echo "$(BLUE)Running Go security scan...$(NC)"
-	@go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+	@which gosec > /dev/null 2>&1 || go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
 	@gosec ./...
 
 security-frontend: ## Run frontend security scan

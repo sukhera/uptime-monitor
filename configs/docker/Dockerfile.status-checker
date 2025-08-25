@@ -14,7 +14,20 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
     -o status-checker ./cmd/status-checker
 
 FROM debian:bullseye-slim
+
+# Create a non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Install ca-certificates and clean up
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
+
+# Copy binary and set ownership
 COPY --from=builder /app/status-checker .
+RUN chmod +x ./status-checker && chown appuser:appuser ./status-checker
+
+# Switch to non-root user
+USER appuser
+
 CMD ["./status-checker"]

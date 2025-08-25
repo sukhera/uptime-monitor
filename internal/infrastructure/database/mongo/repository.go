@@ -2,10 +2,13 @@ package mongo
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	"github.com/sukhera/uptime-monitor/internal/domain/service"
 	"github.com/sukhera/uptime-monitor/internal/shared/errors"
 	"github.com/sukhera/uptime-monitor/internal/shared/logger"
+	"github.com/sukhera/uptime-monitor/internal/shared/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -17,6 +20,22 @@ type ServiceRepository struct {
 	db Interface
 }
 
+// isValidSlug validates that a slug contains only safe characters
+// Prevents NoSQL injection by ensuring only alphanumeric, dash, and underscore characters
+func isValidSlug(slug string) bool {
+	return utils.ValidateSlug(slug)
+}
+
+// validateServiceName ensures service name is safe for database operations
+func validateServiceName(name string) bool {
+	return utils.ValidateServiceName(name)
+}
+
+// sanitizeStringForDB sanitizes string input for database operations
+func sanitizeStringForDB(input string) string {
+	return utils.SanitizeUserInput(input)
+}
+
 // NewServiceRepository creates a new service repository
 func NewServiceRepository(db Interface) *ServiceRepository {
 	return &ServiceRepository{
@@ -26,6 +45,42 @@ func NewServiceRepository(db Interface) *ServiceRepository {
 
 // Create creates a new service
 func (r *ServiceRepository) Create(ctx context.Context, svc *service.Service) error {
+	if svc == nil {
+		return errors.NewValidationError("service cannot be nil")
+	}
+
+	// Additional security validation before domain validation
+	if !validateServiceName(svc.Name) {
+		return errors.NewValidationError("invalid service name: contains unsafe characters or is too long")
+	}
+	
+	if !isValidSlug(svc.Slug) {
+		return errors.NewValidationError("invalid service slug: only alphanumeric characters, hyphens, and underscores allowed")
+	}
+
+	// Sanitize string fields
+	svc.Name = sanitizeStringForDB(svc.Name)
+	svc.Slug = sanitizeStringForDB(svc.Slug)
+	svc.URL = sanitizeStringForDB(svc.URL)
+	
+	// Sanitize headers map
+	if svc.Headers != nil {
+		sanitizedHeaders := make(map[string]string)
+		for k, v := range svc.Headers {
+			sanitizedKey := sanitizeStringForDB(k)
+			sanitizedValue := sanitizeStringForDB(v)
+			if len(sanitizedKey) > 0 && len(sanitizedKey) <= 100 {
+				sanitizedHeaders[sanitizedKey] = sanitizedValue
+			}
+		}
+		svc.Headers = sanitizedHeaders
+	}
+
+	// Sanitize integration metadata
+	if svc.IntegrationMetadata != nil {
+		svc.IntegrationMetadata = utils.SanitizeMap(svc.IntegrationMetadata)
+	}
+
 	if err := svc.Validate(); err != nil {
 		return errors.NewWithCause("invalid service", errors.ErrorKindValidation, err)
 	}
@@ -43,6 +98,17 @@ func (r *ServiceRepository) Create(ctx context.Context, svc *service.Service) er
 
 // GetByID retrieves a service by its ID
 func (r *ServiceRepository) GetByID(ctx context.Context, id string) (*service.Service, error) {
+	// Sanitize and validate the ID input
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, errors.NewValidationError("service ID cannot be empty")
+	}
+
+	// Validate ObjectID format to prevent injection
+	if !utils.ValidateObjectID(id) {
+		return nil, errors.NewValidationError("invalid service ID format: must be a valid 24-character hex string")
+	}
+
 	objectID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return nil, errors.NewValidationError("invalid service ID format")
@@ -63,7 +129,19 @@ func (r *ServiceRepository) GetByID(ctx context.Context, id string) (*service.Se
 
 // GetBySlug retrieves a service by slug
 func (r *ServiceRepository) GetBySlug(ctx context.Context, slug string) (*service.Service, error) {
-	filter := bson.M{"slug": slug}
+	// Sanitize and validate the slug input
+	slug = sanitizeStringForDB(slug)
+	if slug == "" {
+		return nil, errors.NewValidationError("service slug cannot be empty")
+	}
+
+	// Validate slug format to prevent NoSQL injection
+	if !isValidSlug(slug) {
+		return nil, errors.NewValidationError("invalid slug format: only alphanumeric characters, hyphens, and underscores are allowed")
+	}
+	
+	// Use exact match for slug to prevent injection
+	filter := bson.M{"slug": bson.M{"$eq": slug}}
 	var svc service.Service
 	err := r.db.ServicesCollection().FindOne(ctx, filter).Decode(&svc)
 	if err != nil {
@@ -165,6 +243,38 @@ func (r *ServiceRepository) Delete(ctx context.Context, id string) error {
 
 // SaveStatusLog saves a status log entry
 func (r *ServiceRepository) SaveStatusLog(ctx context.Context, log *service.StatusLog) error {
+	if log == nil {
+		return errors.NewValidationError("status log cannot be nil")
+	}
+
+	// Sanitize and validate log data
+	log.ServiceName = sanitizeStringForDB(log.ServiceName)
+	if log.ServiceName == "" {
+		return errors.NewValidationError("service name is required in status log")
+	}
+	
+	if !validateServiceName(log.ServiceName) {
+		return errors.NewValidationError("invalid service name format in status log")
+	}
+
+	// Validate status value
+	if !utils.ValidateStatusValue(log.Status) {
+		return errors.NewValidationError("invalid status value in status log")
+	}
+
+	// Sanitize error message if present
+	log.Error = sanitizeStringForDB(log.Error)
+	
+	// Validate latency is reasonable
+	if log.Latency < 0 || log.Latency > 300000 { // Max 5 minutes
+		log.Latency = 0 // Reset to 0 if invalid
+	}
+
+	// Validate status code is reasonable
+	if log.StatusCode < 0 || log.StatusCode > 999 {
+		log.StatusCode = 0 // Reset if invalid
+	}
+
 	result, err := r.db.StatusLogsCollection().InsertOne(ctx, log)
 	if err != nil {
 		return errors.NewWithCause("failed to create status log", errors.ErrorKindInternal, err)
@@ -216,7 +326,23 @@ func (r *ServiceRepository) GetLatestStatus(ctx context.Context) ([]*service.Ser
 
 // GetStatusHistory retrieves status history for a service
 func (r *ServiceRepository) GetStatusHistory(ctx context.Context, serviceName string, limit int) ([]*service.StatusLog, error) {
-	filter := bson.M{"service_name": serviceName}
+	// Sanitize and validate inputs
+	serviceName = sanitizeStringForDB(serviceName)
+	if serviceName == "" {
+		return nil, errors.NewValidationError("service name cannot be empty")
+	}
+	
+	if !validateServiceName(serviceName) {
+		return nil, errors.NewValidationError("invalid service name format")
+	}
+
+	// Validate limit parameter to prevent resource exhaustion
+	if limit <= 0 || limit > 1000 {
+		limit = 100 // Default safe limit
+	}
+
+	// Use exact match to prevent injection
+	filter := bson.M{"service_name": bson.M{"$eq": serviceName}}
 	opts := options.Find().SetSort(bson.D{{Key: "timestamp", Value: -1}}).SetLimit(int64(limit))
 
 	cursor, err := r.db.StatusLogsCollection().Find(ctx, filter, opts)
@@ -237,4 +363,138 @@ func (r *ServiceRepository) GetStatusHistory(ctx context.Context, serviceName st
 	}
 
 	return statusLogs, nil
+}
+
+// FindByType retrieves services by their type
+func (r *ServiceRepository) FindByType(ctx context.Context, serviceType service.ServiceType) ([]*service.Service, error) {
+	if r.db == nil {
+		return nil, errors.New("database connection is nil", errors.ErrorKindInternal)
+	}
+
+	filter := bson.M{"service_type": serviceType}
+	cursor, err := r.db.ServicesCollection().Find(ctx, filter)
+	if err != nil {
+		return nil, errors.NewWithCause("failed to find services by type", errors.ErrorKindInternal, err)
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log := logger.Get()
+			log.Error(ctx, "Error closing cursor", err, nil)
+		}
+	}()
+
+	var services []*service.Service
+	if err = cursor.All(ctx, &services); err != nil {
+		return nil, errors.NewWithCause("failed to decode services", errors.ErrorKindInternal, err)
+	}
+
+	return services, nil
+}
+
+// BulkCreate creates multiple services in a single operation
+func (r *ServiceRepository) BulkCreate(ctx context.Context, services []*service.Service) error {
+	if len(services) == 0 {
+		return errors.NewValidationError("no services provided for bulk create")
+	}
+
+	// Validate all services first
+	for i, svc := range services {
+		if err := svc.Validate(); err != nil {
+			return errors.NewWithCause("invalid service at index "+string(rune(i)), errors.ErrorKindValidation, err)
+		}
+	}
+
+	if r.db == nil {
+		return errors.New("database connection is nil", errors.ErrorKindInternal)
+	}
+
+	// Convert to interface slice for InsertMany
+	docs := make([]interface{}, len(services))
+	for i, svc := range services {
+		docs[i] = svc
+	}
+
+	// Insert all services
+	_, err := r.db.ServicesCollection().InsertMany(ctx, docs)
+	if err != nil {
+		return errors.NewWithCause("failed to bulk create services", errors.ErrorKindInternal, err)
+	}
+
+	return nil
+}
+
+// SetManualStatus sets a manual status override for a service
+func (r *ServiceRepository) SetManualStatus(ctx context.Context, serviceID string, override *service.ManualStatusOverride) error {
+	if override == nil {
+		return errors.NewValidationError("manual status override cannot be nil")
+	}
+
+	if r.db == nil {
+		return errors.New("database connection is nil", errors.ErrorKindInternal)
+	}
+
+	// Try to parse as ObjectID first, then fall back to slug
+	var filter bson.M
+	if objectID, err := primitive.ObjectIDFromHex(serviceID); err == nil {
+		filter = bson.M{"_id": objectID}
+	} else {
+		// Validate slug format to prevent NoSQL injection
+		if !isValidSlug(serviceID) {
+			return errors.NewValidationError("invalid service identifier format: only alphanumeric characters, hyphens, and underscores are allowed for slugs")
+		}
+		filter = bson.M{"slug": serviceID}
+	}
+
+	update := bson.M{
+		"$set": bson.M{
+			"manual_status": override,
+			"updated_at":    primitive.NewDateTimeFromTime(override.SetAt),
+		},
+	}
+
+	result, err := r.db.ServicesCollection().UpdateOne(ctx, filter, update)
+	if err != nil {
+		return errors.NewWithCause("failed to set manual status", errors.ErrorKindInternal, err)
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.NewNotFoundError("service not found")
+	}
+
+	return nil
+}
+
+// ClearManualStatus removes the manual status override for a service
+func (r *ServiceRepository) ClearManualStatus(ctx context.Context, serviceID string) error {
+	if r.db == nil {
+		return errors.New("database connection is nil", errors.ErrorKindInternal)
+	}
+
+	// Try to parse as ObjectID first, then fall back to slug
+	var filter bson.M
+	if objectID, err := primitive.ObjectIDFromHex(serviceID); err == nil {
+		filter = bson.M{"_id": objectID}
+	} else {
+		// Validate slug format to prevent NoSQL injection
+		if !isValidSlug(serviceID) {
+			return errors.NewValidationError("invalid service identifier format: only alphanumeric characters, hyphens, and underscores are allowed for slugs")
+		}
+		filter = bson.M{"slug": serviceID}
+	}
+
+	update := bson.M{
+		"$unset": bson.M{"manual_status": ""},
+		"$set":   bson.M{"updated_at": primitive.NewDateTimeFromTime(time.Now().UTC())},
+	}
+
+	result, err := r.db.ServicesCollection().UpdateOne(ctx, filter, update)
+	if err != nil {
+		return errors.NewWithCause("failed to clear manual status", errors.ErrorKindInternal, err)
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.NewNotFoundError("service not found")
+	}
+
+	return nil
 }

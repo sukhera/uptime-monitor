@@ -170,6 +170,67 @@ func (c *Container) GetStatusHandler() (*handlers.StatusHandler, error) {
 	return handler, nil
 }
 
+// GetWebhookHandler returns the webhook handler
+func (c *Container) GetWebhookHandler() (*handlers.WebhookHandler, error) {
+	if handler, exists := c.Get("webhook_handler"); exists {
+		return handler.(*handlers.WebhookHandler), nil
+	}
+
+	// Get database dependency
+	db, err := c.GetDatabase()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get database: %w", err)
+	}
+
+	mongoDB, ok := db.(*mongodb.Database)
+	if !ok {
+		return nil, fmt.Errorf("database is not MongoDB implementation")
+	}
+
+	// Create build info
+	buildInfo := handlers.BuildInfo{
+		Version:   "dev",
+		Commit:    "unknown",
+		BuildDate: "unknown",
+	}
+
+	handler := handlers.NewWebhookHandler(mongoDB, buildInfo)
+	c.Register("webhook_handler", handler)
+	return handler, nil
+}
+
+// GetIntegrationHandler returns the integration handler
+func (c *Container) GetIntegrationHandler() (*handlers.IntegrationHandler, error) {
+	if handler, exists := c.Get("integration_handler"); exists {
+		return handler.(*handlers.IntegrationHandler), nil
+	}
+
+	// Get database dependency
+	db, err := c.GetDatabase()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get database: %w", err)
+	}
+
+	mongoDB, ok := db.(*mongodb.Database)
+	if !ok {
+		return nil, fmt.Errorf("database is not MongoDB implementation")
+	}
+
+	// Create build info
+	buildInfo := handlers.BuildInfo{
+		Version:   "dev",
+		Commit:    "unknown",
+		BuildDate: "unknown",
+	}
+
+	// Default base URL (can be made configurable later)
+	baseURL := "http://localhost:8080"
+
+	handler := handlers.NewIntegrationHandler(mongoDB, baseURL, buildInfo)
+	c.Register("integration_handler", handler)
+	return handler, nil
+}
+
 // GetCheckerService returns the checker service
 func (c *Container) GetCheckerService() (checker.ServiceInterface, error) {
 	if service, exists := c.Get("checker"); exists {
@@ -197,14 +258,24 @@ func (c *Container) GetHTTPServer() (server.Interface, error) {
 		return srv.(server.Interface), nil
 	}
 
-	// Get status handler
+	// Get handlers
 	statusHandler, err := c.GetStatusHandler()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get status handler: %w", err)
 	}
 
-	// Setup routes
-	router := routes.SetupRoutes(statusHandler)
+	webhookHandler, err := c.GetWebhookHandler()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get webhook handler: %w", err)
+	}
+
+	integrationHandler, err := c.GetIntegrationHandler()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get integration handler: %w", err)
+	}
+
+	// Setup routes with all handlers
+	router := routes.SetupRoutes(statusHandler, webhookHandler, integrationHandler)
 
 	// Apply middleware
 	corsMiddleware := middleware.NewCORS()

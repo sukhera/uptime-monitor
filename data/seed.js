@@ -1,5 +1,5 @@
 // MongoDB seed script for status page
-db = db.getSiblingDB('statuspage');
+db = db.getSiblingDB('status_page');
 
 // Create collections
 db.createCollection('services');

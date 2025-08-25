@@ -28,7 +28,7 @@ func TestConfig_New(t *testing.T) {
 				},
 				Database: DatabaseConfig{
 					URI:     "mongodb://localhost:27017",
-					Name:    "statuspage",
+					Name:    "status_page",
 					Timeout: 10 * time.Second,
 				},
 				Logging: LoggingConfig{
@@ -56,7 +56,7 @@ func TestConfig_New(t *testing.T) {
 				},
 				Database: DatabaseConfig{
 					URI:     "mongodb://localhost:27017",
-					Name:    "statuspage",
+					Name:    "status_page",
 					Timeout: 10 * time.Second,
 				},
 				Logging: LoggingConfig{
@@ -110,7 +110,7 @@ func TestConfig_New(t *testing.T) {
 				},
 				Database: DatabaseConfig{
 					URI:     "mongodb://localhost:27017",
-					Name:    "statuspage",
+					Name:    "status_page",
 					Timeout: 10 * time.Second,
 				},
 				Logging: LoggingConfig{
@@ -137,7 +137,7 @@ func TestConfig_New(t *testing.T) {
 				},
 				Database: DatabaseConfig{
 					URI:     "mongodb://localhost:27017",
-					Name:    "statuspage",
+					Name:    "status_page",
 					Timeout: 10 * time.Second,
 				},
 				Logging: LoggingConfig{
@@ -210,7 +210,7 @@ func TestConfig_FromEnvironment(t *testing.T) {
 				},
 				Database: DatabaseConfig{
 					URI:     "mongodb://localhost:27017",
-					Name:    "statuspage",
+					Name:    "status_page",
 					Timeout: 10 * time.Second,
 				},
 				Logging: LoggingConfig{
@@ -296,7 +296,7 @@ func TestConfig_Validate(t *testing.T) {
 				},
 				Database: DatabaseConfig{
 					URI:     "mongodb://localhost:27017",
-					Name:    "statuspage",
+					Name:    "status_page",
 					Timeout: 10 * time.Second,
 				},
 				Logging: LoggingConfig{
@@ -312,7 +312,7 @@ func TestConfig_Validate(t *testing.T) {
 				Server: ServerConfig{Port: ""},
 				Database: DatabaseConfig{
 					URI:  "mongodb://localhost:27017",
-					Name: "statuspage",
+					Name: "status_page",
 				},
 				Checker: CheckerConfig{Interval: 2 * time.Minute},
 			},
@@ -324,7 +324,7 @@ func TestConfig_Validate(t *testing.T) {
 				Server: ServerConfig{Port: "8080"},
 				Database: DatabaseConfig{
 					URI:  "",
-					Name: "statuspage",
+					Name: "status_page",
 				},
 				Checker: CheckerConfig{Interval: 2 * time.Minute},
 			},
@@ -348,7 +348,7 @@ func TestConfig_Validate(t *testing.T) {
 				Server: ServerConfig{Port: "8080"},
 				Database: DatabaseConfig{
 					URI:  "mongodb://localhost:27017",
-					Name: "statuspage",
+					Name: "status_page",
 				},
 				Checker: CheckerConfig{Interval: 0},
 			},
@@ -360,7 +360,7 @@ func TestConfig_Validate(t *testing.T) {
 				Server: ServerConfig{Port: "8080"},
 				Database: DatabaseConfig{
 					URI:  "mongodb://localhost:27017",
-					Name: "statuspage",
+					Name: "status_page",
 				},
 				Checker: CheckerConfig{Interval: -1 * time.Minute},
 			},
