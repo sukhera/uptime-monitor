@@ -125,16 +125,11 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sanitize user-controlled input for logging to prevent log injection
-	safeServiceName := strings.ReplaceAll(strings.ReplaceAll(svc.Name, "\n", ""), "\r", "")
-	safeServiceSlug := strings.ReplaceAll(strings.ReplaceAll(serviceSlug, "\n", ""), "\r", "")
-	safePayloadStatus := strings.ReplaceAll(strings.ReplaceAll(payload.Status, "\n", ""), "\r", "")
-	
 	// Log successful webhook processing
 	h.logger.Info(ctx, "Webhook processed successfully", logger.Fields{
-		"service": safeServiceName,
-		"slug":    safeServiceSlug,
-		"status":  safePayloadStatus,
+		"service": svc.Name,
+		"slug":    serviceSlug,
+		"status":  payload.Status,
 		"latency": latency,
 	})
 

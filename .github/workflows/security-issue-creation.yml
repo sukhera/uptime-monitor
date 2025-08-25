@@ -1,0 +1,322 @@
+name: Security Issue Creation
+
+# This workflow creates GitHub issues only for critical security vulnerabilities
+# It runs after security scans and filters results based on severity
+
+on:
+  workflow_run:
+    workflows: ["Security Scanning"]
+    types: [completed]
+  schedule:
+    # Check for new security advisories daily at 8 AM UTC
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+    inputs:
+      severity_threshold:
+        description: 'Minimum severity to create issues (critical, high, medium, low)'
+        required: false
+        default: 'high'
+        type: choice
+        options:
+          - critical
+          - high
+          - medium
+          - low
+
+permissions:
+  contents: read
+  issues: write
+  security-events: read
+
+jobs:
+  # Check for critical vulnerabilities and create issues
+  security-issue-creation:
+    name: Create Security Issues
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'success'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+        cache: true
+
+    - name: Check for Go vulnerabilities
+      id: go-vulns
+      run: |
+        echo "Checking for Go security vulnerabilities..."
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        
+        # Set severity threshold
+        SEVERITY_THRESHOLD="${{ github.event.inputs.severity_threshold || 'high' }}"
+        echo "severity_threshold=$SEVERITY_THRESHOLD" >> $GITHUB_OUTPUT
+        
+        # Run govulncheck and capture output
+        if govulncheck -json ./... > govulncheck-results.json 2>&1; then
+          echo "No Go vulnerabilities found"
+          echo "critical_vulns_found=false" >> $GITHUB_OUTPUT
+        else
+          # Parse JSON output to check for critical/high severity issues
+          CRITICAL_VULNS=$(cat govulncheck-results.json | jq -r '.osv[] | select(.database_specific.severity == "CRITICAL" or .database_specific.severity == "HIGH") | .id' 2>/dev/null || echo "")
+          
+          if [ -n "$CRITICAL_VULNS" ]; then
+            echo "Critical/High Go vulnerabilities found:"
+            echo "$CRITICAL_VULNS"
+            echo "critical_vulns_found=true" >> $GITHUB_OUTPUT
+            echo "$CRITICAL_VULNS" > go_critical_vulns.txt
+          else
+            echo "No critical/high Go vulnerabilities found"
+            echo "critical_vulns_found=false" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: web/react-status-page/package-lock.json
+
+    - name: Check for Node.js vulnerabilities
+      id: node-vulns
+      run: |
+        cd web/react-status-page
+        echo "Checking for Node.js security vulnerabilities..."
+        
+        # Install dependencies
+        npm ci
+        
+        # Run npm audit and check for high/critical issues
+        if npm audit --json > npm-audit-results.json 2>&1; then
+          echo "No Node.js vulnerabilities found"
+          echo "critical_vulns_found=false" >> $GITHUB_OUTPUT
+        else
+          # Parse audit results for critical/high severity
+          CRITICAL_VULNS=$(cat npm-audit-results.json | jq -r '.vulnerabilities | to_entries[] | select(.value.severity == "critical" or .value.severity == "high") | .key' 2>/dev/null || echo "")
+          
+          if [ -n "$CRITICAL_VULNS" ]; then
+            echo "Critical/High Node.js vulnerabilities found:"
+            echo "$CRITICAL_VULNS"
+            echo "critical_vulns_found=true" >> $GITHUB_OUTPUT
+            echo "$CRITICAL_VULNS" > ../node_critical_vulns.txt
+          else
+            echo "No critical/high Node.js vulnerabilities found"
+            echo "critical_vulns_found=false" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+    - name: Get GitHub Security Advisories
+      id: security-advisories
+      run: |
+        echo "Checking GitHub Security Advisories..."
+        
+        # Get security advisories for this repository
+        gh api graphql --field query='
+        query {
+          repository(owner: "${{ github.repository_owner }}", name: "${{ github.event.repository.name }}") {
+            vulnerabilityAlerts(first: 10, states: [OPEN]) {
+              nodes {
+                id
+                securityVulnerability {
+                  package {
+                    name
+                  }
+                  advisory {
+                    summary
+                    severity
+                    publishedAt
+                    permalink
+                  }
+                }
+              }
+            }
+          }
+        }' > security-advisories.json 2>/dev/null || echo '{"data":{"repository":{"vulnerabilityAlerts":{"nodes":[]}}}}' > security-advisories.json
+        
+        # Check for critical/high severity advisories
+        CRITICAL_ADVISORIES=$(cat security-advisories.json | jq -r '.data.repository.vulnerabilityAlerts.nodes[] | select(.securityVulnerability.advisory.severity == "CRITICAL" or .securityVulnerability.advisory.severity == "HIGH") | .securityVulnerability.advisory.permalink' 2>/dev/null || echo "")
+        
+        if [ -n "$CRITICAL_ADVISORIES" ]; then
+          echo "Critical/High security advisories found"
+          echo "advisories_found=true" >> $GITHUB_OUTPUT
+          echo "$CRITICAL_ADVISORIES" > security_advisories.txt
+        else
+          echo "No critical/high security advisories found"
+          echo "advisories_found=false" >> $GITHUB_OUTPUT
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create Go vulnerability issue
+      if: steps.go-vulns.outputs.critical_vulns_found == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const vulns = fs.readFileSync('go_critical_vulns.txt', 'utf8').trim().split('\n').filter(v => v);
+          
+          const issueBody = `
+          ## 🚨 Critical Go Security Vulnerabilities Detected
+          
+          **Severity**: Critical/High
+          **Detection Date**: ${new Date().toISOString()}
+          **Repository**: ${{ github.repository }}
+          **Branch**: ${{ github.ref_name }}
+          
+          ### Vulnerabilities Found
+          ${vulns.map(v => `- \`${v}\``).join('\n')}
+          
+          ### Action Required
+          - [ ] Review vulnerability details
+          - [ ] Update affected dependencies
+          - [ ] Test application functionality
+          - [ ] Deploy security fix
+          - [ ] Verify fix resolves vulnerabilities
+          
+          ### Resources
+          - [Go Vulnerability Database](https://vuln.go.dev/)
+          - [govulncheck documentation](https://golang.org/x/vuln/cmd/govulncheck)
+          
+          ### Automated Detection
+          This issue was automatically created by the security scanning workflow.
+          Review the latest security scan results for complete details.
+          
+          **⚠️ IMPORTANT**: This issue contains information about security vulnerabilities. Handle with appropriate care.
+          `;
+          
+          const issue = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: '🚨 Critical Go Security Vulnerabilities Detected',
+            body: issueBody.trim(),
+            labels: ['security', 'vulnerability', 'go', 'critical', 'automated']
+          });
+          
+          console.log(`Created security issue #${issue.data.number}`);
+
+    - name: Create Node.js vulnerability issue
+      if: steps.node-vulns.outputs.critical_vulns_found == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const vulns = fs.readFileSync('node_critical_vulns.txt', 'utf8').trim().split('\n').filter(v => v);
+          
+          const issueBody = `
+          ## 🚨 Critical Node.js Security Vulnerabilities Detected
+          
+          **Severity**: Critical/High
+          **Detection Date**: ${new Date().toISOString()}
+          **Repository**: ${{ github.repository }}
+          **Branch**: ${{ github.ref_name }}
+          **Directory**: web/react-status-page
+          
+          ### Vulnerabilities Found
+          ${vulns.map(v => `- \`${v}\``).join('\n')}
+          
+          ### Action Required
+          - [ ] Review vulnerability details with \`npm audit\`
+          - [ ] Update affected packages with \`npm audit fix\`
+          - [ ] Test application functionality
+          - [ ] Update package-lock.json
+          - [ ] Verify fix resolves vulnerabilities
+          
+          ### Commands to Run
+          \`\`\`bash
+          cd web/react-status-page
+          npm audit
+          npm audit fix
+          npm test
+          npm run build
+          \`\`\`
+          
+          ### Resources
+          - [npm audit documentation](https://docs.npmjs.com/cli/audit)
+          - [Node.js security best practices](https://nodejs.org/en/security/)
+          
+          ### Automated Detection
+          This issue was automatically created by the security scanning workflow.
+          Review the latest security scan results for complete details.
+          
+          **⚠️ IMPORTANT**: This issue contains information about security vulnerabilities. Handle with appropriate care.
+          `;
+          
+          const issue = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: '🚨 Critical Node.js Security Vulnerabilities Detected',
+            body: issueBody.trim(),
+            labels: ['security', 'vulnerability', 'nodejs', 'critical', 'automated']
+          });
+          
+          console.log(`Created security issue #${issue.data.number}`);
+
+    - name: Create GitHub Security Advisory issue
+      if: steps.security-advisories.outputs.advisories_found == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const advisories = fs.readFileSync('security_advisories.txt', 'utf8').trim().split('\n').filter(a => a);
+          
+          const issueBody = `
+          ## 🚨 GitHub Security Advisories Require Attention
+          
+          **Severity**: Critical/High
+          **Detection Date**: ${new Date().toISOString()}
+          **Repository**: ${{ github.repository }}
+          
+          ### Security Advisories
+          ${advisories.map(a => `- ${a}`).join('\n')}
+          
+          ### Action Required
+          - [ ] Review each security advisory
+          - [ ] Update affected dependencies
+          - [ ] Test application functionality
+          - [ ] Verify fixes resolve advisories
+          - [ ] Close advisories in GitHub Security tab
+          
+          ### Resources
+          - [Repository Security Advisories](https://github.com/${{ github.repository }}/security/advisories)
+          - [Dependabot alerts](https://github.com/${{ github.repository }}/security/dependabot)
+          
+          ### Automated Detection
+          This issue was automatically created by the security monitoring workflow.
+          
+          **⚠️ IMPORTANT**: Review and address these security advisories promptly.
+          `;
+          
+          const issue = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: '🚨 GitHub Security Advisories Require Attention',
+            body: issueBody.trim(),
+            labels: ['security', 'advisory', 'dependabot', 'critical', 'automated']
+          });
+          
+          console.log(`Created security advisory issue #${issue.data.number}`);
+
+    - name: Security check summary
+      run: |
+        echo "# Security Vulnerability Check Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Date**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+        echo "**Severity Threshold**: ${{ steps.go-vulns.outputs.severity_threshold }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Results" >> $GITHUB_STEP_SUMMARY
+        echo "- Go Critical/High Vulnerabilities: ${{ steps.go-vulns.outputs.critical_vulns_found == 'true' && '❌ Found' || '✅ None' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Node.js Critical/High Vulnerabilities: ${{ steps.node-vulns.outputs.critical_vulns_found == 'true' && '❌ Found' || '✅ None' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- GitHub Security Advisories: ${{ steps.security-advisories.outputs.advisories_found == 'true' && '❌ Found' || '✅ None' }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ steps.go-vulns.outputs.critical_vulns_found }}" == "true" || "${{ steps.node-vulns.outputs.critical_vulns_found }}" == "true" || "${{ steps.security-advisories.outputs.advisories_found }}" == "true" ]]; then
+          echo "## 🚨 Action Required" >> $GITHUB_STEP_SUMMARY
+          echo "Critical security vulnerabilities detected. Issues have been created for immediate attention." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ✅ All Clear" >> $GITHUB_STEP_SUMMARY
+          echo "No critical security vulnerabilities detected." >> $GITHUB_STEP_SUMMARY
+        fi
