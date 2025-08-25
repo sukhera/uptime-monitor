@@ -232,7 +232,7 @@ func TestWebhookHandler_HandleWebhook(t *testing.T) {
 			path:           "/api/v1/webhook/",
 			payload:        service.WebhookPayload{Status: "operational"},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Invalid service ID in URL",
+			expectedError:  "Invalid service slug in URL",
 		},
 		{
 			name:           "invalid JSON payload",
@@ -479,7 +479,7 @@ func TestWebhookHandler_validateWebhookPayload(t *testing.T) {
 				Latency: &latencyNegative,
 			},
 			wantErr: true,
-			errMsg:  "latency cannot be negative",
+			errMsg:  "latency must be between 0 and 300000ms",
 		},
 		{
 			name: "all valid statuses - operational",

@@ -15,6 +15,7 @@ import (
 	"github.com/sukhera/uptime-monitor/internal/domain/service"
 	mongodb "github.com/sukhera/uptime-monitor/internal/infrastructure/database/mongo"
 	"github.com/sukhera/uptime-monitor/internal/shared/logger"
+	"github.com/sukhera/uptime-monitor/internal/shared/utils"
 )
 
 // IntegrationHandler handles integration operations like manual status overrides and bulk imports
@@ -46,7 +47,14 @@ func (h *IntegrationHandler) SetManualStatus(w http.ResponseWriter, r *http.Requ
 	// Extract service ID from URL path
 	serviceID := h.extractServiceIDFromPath(r.URL.Path)
 	if serviceID == "" {
-		h.WriteBadRequestError(w, "Invalid service ID in URL", fmt.Errorf("could not extract service ID from path: %s", r.URL.Path))
+		h.WriteBadRequestError(w, "Invalid service ID in URL", fmt.Errorf("could not extract service ID from path"))
+		return
+	}
+	
+	// Sanitize and validate service ID
+	serviceID = utils.SanitizeUserInput(serviceID)
+	if !utils.ValidateSlug(serviceID) && !utils.ValidateObjectID(serviceID) {
+		h.WriteBadRequestError(w, "Invalid service ID format", fmt.Errorf("service ID must be a valid slug or ObjectID"))
 		return
 	}
 
@@ -69,7 +77,10 @@ func (h *IntegrationHandler) SetManualStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Validate request
+	// Sanitize and validate request fields
+	request.Status = utils.SanitizeUserInput(request.Status)
+	request.Reason = utils.SanitizeUserInput(request.Reason)
+	
 	if request.Status == "" {
 		h.WriteBadRequestError(w, "Status is required", service.ErrManualStatusRequired)
 		return
@@ -80,8 +91,15 @@ func (h *IntegrationHandler) SetManualStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if !service.IsValidStatus(request.Status) {
+	// Validate status value using security utility
+	if !utils.ValidateStatusValue(request.Status) {
 		h.WriteBadRequestError(w, "Invalid status value", service.ErrInvalidServiceStatus)
+		return
+	}
+	
+	// Validate reason length and content
+	if len(request.Reason) > 500 {
+		h.WriteBadRequestError(w, "Reason too long (max 500 characters)", fmt.Errorf("reason exceeds maximum length"))
 		return
 	}
 
@@ -111,7 +129,8 @@ func (h *IntegrationHandler) SetManualStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	h.logger.Info(ctx, "Manual status set", logger.Fields{
+	// Log with sanitized data - the logger now handles sanitization internally
+	h.logger.Info(ctx, "Manual status set successfully", logger.Fields{
 		"service_id": serviceID,
 		"status":     request.Status,
 		"reason":     request.Reason,
@@ -143,7 +162,14 @@ func (h *IntegrationHandler) ClearManualStatus(w http.ResponseWriter, r *http.Re
 	// Extract service ID from URL path
 	serviceID := h.extractServiceIDFromPath(r.URL.Path)
 	if serviceID == "" {
-		h.WriteBadRequestError(w, "Invalid service ID in URL", fmt.Errorf("could not extract service ID from path: %s", r.URL.Path))
+		h.WriteBadRequestError(w, "Invalid service ID in URL", fmt.Errorf("could not extract service ID from path"))
+		return
+	}
+	
+	// Sanitize and validate service ID
+	serviceID = utils.SanitizeUserInput(serviceID)
+	if !utils.ValidateSlug(serviceID) && !utils.ValidateObjectID(serviceID) {
+		h.WriteBadRequestError(w, "Invalid service ID format", fmt.Errorf("service ID must be a valid slug or ObjectID"))
 		return
 	}
 
@@ -163,7 +189,8 @@ func (h *IntegrationHandler) ClearManualStatus(w http.ResponseWriter, r *http.Re
 
 	userID := h.getCurrentUser(r)
 	
-	h.logger.Info(ctx, "Manual status cleared", logger.Fields{
+	// Log with sanitized data - the logger now handles sanitization internally
+	h.logger.Info(ctx, "Manual status cleared successfully", logger.Fields{
 		"service_id": serviceID,
 		"user":       userID,
 	})
@@ -190,7 +217,14 @@ func (h *IntegrationHandler) GetIntegrationDetails(w http.ResponseWriter, r *htt
 	// Extract service ID from URL path
 	serviceID := h.extractServiceIDFromPath(r.URL.Path)
 	if serviceID == "" {
-		h.WriteBadRequestError(w, "Invalid service ID in URL", fmt.Errorf("could not extract service ID from path: %s", r.URL.Path))
+		h.WriteBadRequestError(w, "Invalid service ID in URL", fmt.Errorf("could not extract service ID from path"))
+		return
+	}
+	
+	// Sanitize and validate service ID
+	serviceID = utils.SanitizeUserInput(serviceID)
+	if !utils.ValidateSlug(serviceID) && !utils.ValidateObjectID(serviceID) {
+		h.WriteBadRequestError(w, "Invalid service ID format", fmt.Errorf("service ID must be a valid slug or ObjectID"))
 		return
 	}
 
@@ -220,6 +254,7 @@ func (h *IntegrationHandler) GetIntegrationDetails(w http.ResponseWriter, r *htt
 
 		// Update service with webhook details (placeholder)
 		if err := h.updateService(ctx, svc); err != nil {
+			// Error logging is handled by the logger's internal sanitization
 			h.logger.Error(ctx, "Failed to update webhook details", err, logger.Fields{"service_id": serviceID})
 		}
 	}
@@ -283,6 +318,29 @@ func (h *IntegrationHandler) BulkImport(w http.ResponseWriter, r *http.Request) 
 
 	// Process each service
 	for i, svc := range request.Services {
+		// Sanitize service fields
+		svc.Name = utils.SanitizeUserInput(svc.Name)
+		svc.Slug = utils.SanitizeUserInput(svc.Slug)
+		svc.URL = utils.SanitizeUserInput(svc.URL)
+		
+		// Sanitize integration metadata
+		if svc.IntegrationMetadata != nil {
+			svc.IntegrationMetadata = utils.SanitizeMap(svc.IntegrationMetadata)
+		}
+		
+		// Validate service name and URL
+		if !utils.ValidateServiceName(svc.Name) {
+			errors = append(errors, fmt.Sprintf("Service %d (%s): invalid service name format", i+1, svc.Name))
+			failed++
+			continue
+		}
+		
+		if svc.RequiresURL() && !utils.ValidateURL(svc.URL) {
+			errors = append(errors, fmt.Sprintf("Service %d (%s): invalid URL format", i+1, svc.Name))
+			failed++
+			continue
+		}
+
 		// Set timestamps
 		now := time.Now().UTC()
 		svc.CreatedAt = now
@@ -334,7 +392,8 @@ func (h *IntegrationHandler) BulkImport(w http.ResponseWriter, r *http.Request) 
 		status = http.StatusPartialContent
 	}
 
-	h.logger.Info(ctx, "Bulk import completed", logger.Fields{
+	// Log bulk import result - logger handles sanitization internally
+	h.logger.Info(ctx, "Bulk import operation completed", logger.Fields{
 		"imported": imported,
 		"failed":   failed,
 		"total":    len(request.Services),

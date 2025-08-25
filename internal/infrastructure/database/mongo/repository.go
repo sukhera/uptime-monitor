@@ -2,12 +2,13 @@ package mongo
 
 import (
 	"context"
-	"regexp"
+	"strings"
 	"time"
 
 	"github.com/sukhera/uptime-monitor/internal/domain/service"
 	"github.com/sukhera/uptime-monitor/internal/shared/errors"
 	"github.com/sukhera/uptime-monitor/internal/shared/logger"
+	"github.com/sukhera/uptime-monitor/internal/shared/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -22,12 +23,17 @@ type ServiceRepository struct {
 // isValidSlug validates that a slug contains only safe characters
 // Prevents NoSQL injection by ensuring only alphanumeric, dash, and underscore characters
 func isValidSlug(slug string) bool {
-	if slug == "" {
-		return false
-	}
-	// Allow only alphanumeric characters, hyphens, and underscores
-	validSlugPattern := regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
-	return validSlugPattern.MatchString(slug)
+	return utils.ValidateSlug(slug)
+}
+
+// validateServiceName ensures service name is safe for database operations
+func validateServiceName(name string) bool {
+	return utils.ValidateServiceName(name)
+}
+
+// sanitizeStringForDB sanitizes string input for database operations
+func sanitizeStringForDB(input string) string {
+	return utils.SanitizeUserInput(input)
 }
 
 // NewServiceRepository creates a new service repository
@@ -39,6 +45,42 @@ func NewServiceRepository(db Interface) *ServiceRepository {
 
 // Create creates a new service
 func (r *ServiceRepository) Create(ctx context.Context, svc *service.Service) error {
+	if svc == nil {
+		return errors.NewValidationError("service cannot be nil")
+	}
+
+	// Additional security validation before domain validation
+	if !validateServiceName(svc.Name) {
+		return errors.NewValidationError("invalid service name: contains unsafe characters or is too long")
+	}
+	
+	if !isValidSlug(svc.Slug) {
+		return errors.NewValidationError("invalid service slug: only alphanumeric characters, hyphens, and underscores allowed")
+	}
+
+	// Sanitize string fields
+	svc.Name = sanitizeStringForDB(svc.Name)
+	svc.Slug = sanitizeStringForDB(svc.Slug)
+	svc.URL = sanitizeStringForDB(svc.URL)
+	
+	// Sanitize headers map
+	if svc.Headers != nil {
+		sanitizedHeaders := make(map[string]string)
+		for k, v := range svc.Headers {
+			sanitizedKey := sanitizeStringForDB(k)
+			sanitizedValue := sanitizeStringForDB(v)
+			if len(sanitizedKey) > 0 && len(sanitizedKey) <= 100 {
+				sanitizedHeaders[sanitizedKey] = sanitizedValue
+			}
+		}
+		svc.Headers = sanitizedHeaders
+	}
+
+	// Sanitize integration metadata
+	if svc.IntegrationMetadata != nil {
+		svc.IntegrationMetadata = utils.SanitizeMap(svc.IntegrationMetadata)
+	}
+
 	if err := svc.Validate(); err != nil {
 		return errors.NewWithCause("invalid service", errors.ErrorKindValidation, err)
 	}
@@ -56,6 +98,17 @@ func (r *ServiceRepository) Create(ctx context.Context, svc *service.Service) er
 
 // GetByID retrieves a service by its ID
 func (r *ServiceRepository) GetByID(ctx context.Context, id string) (*service.Service, error) {
+	// Sanitize and validate the ID input
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, errors.NewValidationError("service ID cannot be empty")
+	}
+
+	// Validate ObjectID format to prevent injection
+	if !utils.ValidateObjectID(id) {
+		return nil, errors.NewValidationError("invalid service ID format: must be a valid 24-character hex string")
+	}
+
 	objectID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return nil, errors.NewValidationError("invalid service ID format")
@@ -76,12 +129,19 @@ func (r *ServiceRepository) GetByID(ctx context.Context, id string) (*service.Se
 
 // GetBySlug retrieves a service by slug
 func (r *ServiceRepository) GetBySlug(ctx context.Context, slug string) (*service.Service, error) {
+	// Sanitize and validate the slug input
+	slug = sanitizeStringForDB(slug)
+	if slug == "" {
+		return nil, errors.NewValidationError("service slug cannot be empty")
+	}
+
 	// Validate slug format to prevent NoSQL injection
 	if !isValidSlug(slug) {
 		return nil, errors.NewValidationError("invalid slug format: only alphanumeric characters, hyphens, and underscores are allowed")
 	}
 	
-	filter := bson.M{"slug": slug}
+	// Use exact match for slug to prevent injection
+	filter := bson.M{"slug": bson.M{"$eq": slug}}
 	var svc service.Service
 	err := r.db.ServicesCollection().FindOne(ctx, filter).Decode(&svc)
 	if err != nil {
@@ -183,6 +243,38 @@ func (r *ServiceRepository) Delete(ctx context.Context, id string) error {
 
 // SaveStatusLog saves a status log entry
 func (r *ServiceRepository) SaveStatusLog(ctx context.Context, log *service.StatusLog) error {
+	if log == nil {
+		return errors.NewValidationError("status log cannot be nil")
+	}
+
+	// Sanitize and validate log data
+	log.ServiceName = sanitizeStringForDB(log.ServiceName)
+	if log.ServiceName == "" {
+		return errors.NewValidationError("service name is required in status log")
+	}
+	
+	if !validateServiceName(log.ServiceName) {
+		return errors.NewValidationError("invalid service name format in status log")
+	}
+
+	// Validate status value
+	if !utils.ValidateStatusValue(log.Status) {
+		return errors.NewValidationError("invalid status value in status log")
+	}
+
+	// Sanitize error message if present
+	log.Error = sanitizeStringForDB(log.Error)
+	
+	// Validate latency is reasonable
+	if log.Latency < 0 || log.Latency > 300000 { // Max 5 minutes
+		log.Latency = 0 // Reset to 0 if invalid
+	}
+
+	// Validate status code is reasonable
+	if log.StatusCode < 0 || log.StatusCode > 999 {
+		log.StatusCode = 0 // Reset if invalid
+	}
+
 	result, err := r.db.StatusLogsCollection().InsertOne(ctx, log)
 	if err != nil {
 		return errors.NewWithCause("failed to create status log", errors.ErrorKindInternal, err)
@@ -234,7 +326,23 @@ func (r *ServiceRepository) GetLatestStatus(ctx context.Context) ([]*service.Ser
 
 // GetStatusHistory retrieves status history for a service
 func (r *ServiceRepository) GetStatusHistory(ctx context.Context, serviceName string, limit int) ([]*service.StatusLog, error) {
-	filter := bson.M{"service_name": serviceName}
+	// Sanitize and validate inputs
+	serviceName = sanitizeStringForDB(serviceName)
+	if serviceName == "" {
+		return nil, errors.NewValidationError("service name cannot be empty")
+	}
+	
+	if !validateServiceName(serviceName) {
+		return nil, errors.NewValidationError("invalid service name format")
+	}
+
+	// Validate limit parameter to prevent resource exhaustion
+	if limit <= 0 || limit > 1000 {
+		limit = 100 // Default safe limit
+	}
+
+	// Use exact match to prevent injection
+	filter := bson.M{"service_name": bson.M{"$eq": serviceName}}
 	opts := options.Find().SetSort(bson.D{{Key: "timestamp", Value: -1}}).SetLimit(int64(limit))
 
 	cursor, err := r.db.StatusLogsCollection().Find(ctx, filter, opts)

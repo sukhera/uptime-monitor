@@ -17,6 +17,7 @@ import (
 	"github.com/sukhera/uptime-monitor/internal/domain/service"
 	mongodb "github.com/sukhera/uptime-monitor/internal/infrastructure/database/mongo"
 	"github.com/sukhera/uptime-monitor/internal/shared/logger"
+	"github.com/sukhera/uptime-monitor/internal/shared/utils"
 )
 
 // WebhookHandler handles webhook operations
@@ -46,7 +47,14 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	// Extract service slug from URL path
 	serviceSlug := h.extractServiceSlugFromPath(r.URL.Path)
 	if serviceSlug == "" {
-		h.WriteBadRequestError(w, "Invalid service ID in URL", fmt.Errorf("could not extract service ID from path: %s", r.URL.Path))
+		h.WriteBadRequestError(w, "Invalid service slug in URL", fmt.Errorf("could not extract service slug from path"))
+		return
+	}
+	
+	// Sanitize and validate service slug
+	serviceSlug = utils.SanitizeUserInput(serviceSlug)
+	if !utils.ValidateSlug(serviceSlug) {
+		h.WriteBadRequestError(w, "Invalid service slug format", fmt.Errorf("service slug must contain only alphanumeric characters, hyphens, and underscores"))
 		return
 	}
 
@@ -63,6 +71,15 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	if err := json.Unmarshal(body, &payload); err != nil {
 		h.WriteBadRequestError(w, "Invalid JSON payload", err)
 		return
+	}
+
+	// Sanitize payload fields
+	payload.Status = utils.SanitizeUserInput(payload.Status)
+	payload.Message = utils.SanitizeUserInput(payload.Message)
+	
+	// Sanitize metadata
+	if payload.Metadata != nil {
+		payload.Metadata = utils.SanitizeMap(payload.Metadata)
 	}
 
 	// Validate payload
@@ -125,7 +142,7 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log successful webhook processing
+	// Log successful webhook processing - logger handles sanitization internally
 	h.logger.Info(ctx, "Webhook processed successfully", logger.Fields{
 		"service": svc.Name,
 		"slug":    serviceSlug,
@@ -204,13 +221,21 @@ func (h *WebhookHandler) validateWebhookPayload(payload *service.WebhookPayload)
 		return fmt.Errorf("status is required")
 	}
 
-	if !service.IsValidStatus(payload.Status) {
+	// Use security utility for status validation
+	if !utils.ValidateStatusValue(payload.Status) {
 		return fmt.Errorf("invalid status value: %s", payload.Status)
 	}
 
-	// Optional: validate latency if provided
-	if payload.Latency != nil && *payload.Latency < 0 {
-		return fmt.Errorf("latency cannot be negative")
+	// Validate latency if provided
+	if payload.Latency != nil {
+		if *payload.Latency < 0 || *payload.Latency > 300000 { // Max 5 minutes
+			return fmt.Errorf("latency must be between 0 and 300000ms")
+		}
+	}
+
+	// Validate message length if provided
+	if len(payload.Message) > 1000 {
+		return fmt.Errorf("message too long (max 1000 characters)")
 	}
 
 	return nil

@@ -355,22 +355,23 @@ func TestServiceRepository_SlugValidation(t *testing.T) {
 	
 	// Test GetBySlug with invalid slugs
 	invalidSlugs := []struct {
-		name string
-		slug string
+		name        string
+		slug        string
+		expectedMsg string
 	}{
-		{"empty slug", ""},
-		{"slug with spaces", "my service"},
-		{"slug with special chars", "my@service"},
-		{"slug with newlines", "my\nservice"},
-		{"slug with dots", "my.service"},
-		{"slug with slashes", "my/service"},
+		{"empty slug", "", "service slug cannot be empty"},
+		{"slug with spaces", "my service", "invalid slug format"},
+		{"slug with special chars", "my@service", "invalid slug format"},
+		{"slug with newlines", "my\nservice", "invalid slug format"},
+		{"slug with dots", "my.service", "invalid slug format"},
+		{"slug with slashes", "my/service", "invalid slug format"},
 	}
 	
 	for _, tt := range invalidSlugs {
 		t.Run("GetBySlug_"+tt.name, func(t *testing.T) {
 			_, err := repo.GetBySlug(context.Background(), tt.slug)
 			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "invalid slug format")
+			assert.Contains(t, err.Error(), tt.expectedMsg)
 		})
 	}
 }
